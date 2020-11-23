@@ -68,6 +68,7 @@ def blastduo(blastn, duo, f1, f2, qlen) :
 def pairwise_blastn(fnames, blastn, outfile, ncore=1, mdb=False, bname=False) :
     """
     Run the pairwise blastn process
+    Outfile will be a .tsv file
     """
 
     if mdb :
