@@ -1,6 +1,6 @@
 # ANI
 
-A simple and fast python script for blastn pairwise average nucleotid identity (ANI) calculation. Use [pyblast](https://github.com/jsgounot/PyBlast) and [google fire](https://github.com/google/python-fire/blob/master/docs/guide.md).
+A simple and fast python script for blastn pairwise average nucleotide identity (ANI) calculation. Use [pyblast](https://github.com/jsgounot/PyBlast) and [google fire](https://github.com/google/python-fire).
 
 ## Basic command :
 
