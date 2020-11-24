@@ -1,4 +1,3 @@
-# BioPyScripts
- Short Python Scripts
+# BioScripts
 
-Collection of short python scripts
+Collection of bioinformatic scripts
