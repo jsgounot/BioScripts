@@ -17,5 +17,6 @@ Related publications or tools :
 * [jspeciesWS](http://jspecies.ribohost.com/jspeciesws/) : A graphical interface (blast+)
 * [pyani](https://github.com/widdowquinn/pyani) : Another python library (blast+)
 * [chjp/ani](https://github.com/chjp/ANI) : Similar but in perl (blastall)
+* [mummer4 dnadiff](https://github.com/mummer4/mummer#dnadiff) provides another way to get ANI values
 
 The original calculation of ANI is based on blastall command. This python script uses blast+ with the following arguments `-evalue 1e-15 -max_target_seqs 1 -xdrop_gap_final 150 -dust no`. Results might differ from other tools depending of the blast version. 
