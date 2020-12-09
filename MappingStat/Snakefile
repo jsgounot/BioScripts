@@ -1,0 +1,49 @@
+import glob
+
+samples = glob.glob('samfiles/*.sam')
+samples = {os.path.basename(fname)[:-4] for fname in samples}
+
+rule all:
+    input:
+        expand("stats/{sample}.depth.window.tsv", sample=samples),
+        expand("stats/{sample}.mapped.txt", sample=samples)
+
+rule samtools_sort:
+    input:
+        "samfiles/{sample}.sam"
+    output:
+        "sorted_bam/{sample}.bam"
+    shell:
+        "samtools sort {input} > {output}"
+
+rule stat_mapped:
+    input:
+        "sorted_bam/{sample}.bam"
+    output:
+        "stats/{sample}.mapped.txt"
+    shell:
+        "scripts/mapped.stat.sh {input} > {output}"
+
+rule samtools_mapped:
+    input:
+        "sorted_bam/{sample}.bam"
+    output:
+        "mapped_bam/{sample}.bam"
+    shell:
+        "samtools view -F 12 -h {input} > {output}"
+
+rule samtools_depth:
+    input:
+        "mapped_bam/{sample}.bam"
+    output:
+        "depths/{sample}.tsv.gz"
+    shell:
+        "samtools depth -aa {input} | gzip > {output}"
+
+rule depth_window:
+    input:
+        "depths/{sample}.tsv.gz"
+    output:
+        "stats/{sample}.depth.window.tsv"
+    script:
+        "scripts/window_depth.py"
