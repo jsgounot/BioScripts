@@ -2,6 +2,8 @@
 
 Basic snakemake mapping and calling process. This pipeline manages on its own reference index. You can specify one or multiple set of reads for one sample.
 
+[Download only this directory](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/jsgounot/BioScripts/tree/main/MapCallGATK)
+
 # Dependancies
 
 * snakemake
