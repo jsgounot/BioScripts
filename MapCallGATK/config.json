@@ -1,0 +1,16 @@
+{
+	"sampleA" : {
+		"reads" : [
+			[
+				"/path/to/pair/1.fastq.gz",
+				"/path/to.pair/2.fastq.gz"
+			],
+
+			[
+				"/path/to/a/single/read.fastq"
+			]
+		],
+		"reference" : "/path/to/reference.fa",
+		"ploidy" : 2
+	}
+}

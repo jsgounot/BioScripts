@@ -1,0 +1,196 @@
+configfile: "config.json"
+
+def make_outfiles(config) :
+    samples, ploidies = [], []
+    for sample, sdata in config.items() :
+        ploidy = sdata["ploidy"]
+        if isinstance(ploidy, int) :
+            samples.append(sample)
+            ploidies.append(ploidy)
+        elif isinstance(ploidy, list) :
+            for element in ploidy :
+                if not isinstance(element, int) :
+                    raise Exception("Ploidy must be an integer or a list of integers")
+                samples.append(sample)
+                ploidies.append(element)
+        else :  
+            raise Exception("Ploidy must be an integer or a list of integers")
+
+    return samples, ploidies
+
+def make_bam_merge_idx(config) :
+    samples, midxs = [], []
+    for sample, sdata in config.items() :
+        if not "reads" in sdata :
+            raise Exception("A sample must have at least on reads group")
+        for i in range(len(sdata["reads"])) :
+            samples.append(sample)
+            midxs.append(i)
+
+    return samples, midxs
+
+SAMPLES, PLOIDIES = make_outfiles(config)
+MERGESAMPS, MERGEIDXS = make_bam_merge_idx(config)
+REFERENCES = list(set(sdata["reference"] for sdata in config.values()))
+REFERENCESDICT = [os.path.splitext(ref)[0] + ".dict" for ref in REFERENCES]
+
+# -------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        expand("vcf/{sample}.{ploidy}.vcf", zip, 
+            sample=SAMPLES, ploidy=PLOIDIES)
+
+rule bwa_idx :
+    input:
+        REFERENCES
+    output:
+        "{input}.amb"
+    shell:
+        "bwa index {input}"
+
+rule bwa_mem:
+    input:
+        reads = lambda wildcards: config[wildcards.sample]["reads"][int(wildcards.ridx)],
+        reference = lambda wildcards: config[wildcards.sample]["reference"],
+        reference_idx = lambda wildcards: config[wildcards.sample]["reference"] + ".amb"
+    output:
+        temp("bwa_mapped/{sample}.{ridx}.bam")
+    params:
+        rg = "@RG\\tID:{sample}\\tSM:{sample}\\tLB:{ridx}"
+    threads: 
+        2
+    log:
+        "logs/bwa/{sample}.{ridx}.log"
+    shell:
+        "(bwa mem -M -R '{params.rg}' -t {threads} {input.reference} {input.reads} \
+         | samtools view -b > {output}) 2> {log}"
+
+rule samtools_sort_names:
+    input:
+        "bwa_mapped/{sample}.{ridx}.bam"
+    output:
+        temp("sorted_names_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools sort -n -o {output} {input}"
+
+rule samtools_fixmate:
+    input:
+        "sorted_names_bam/{sample}.{ridx}.bam"
+    output:
+        temp("fixmate_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools fixmate {input} {output}"
+
+rule samtools_sort_coordinates:
+    input:
+        "fixmate_bam/{sample}.{ridx}.bam"
+    output:
+        "sorted_bam/{sample}.{ridx}.bam"
+    shell:
+        "samtools sort -o {output} {input}"
+
+rule samtools_index:
+    input:
+        "sorted_bam/{sample}.{ridx}.bam"
+    output:
+        "sorted_bam/{sample}.{ridx}.bam.bai"
+    shell:
+        "samtools index {input}"
+
+rule stat_mapped:
+    input:
+        "sorted_bam/{sample}.{ridx}.bam"
+    output:
+        "stats/{sample}.{ridx}.mapped.txt"
+    shell:
+        "scripts/mapped.stat.sh {input} > {output}"
+
+rule samtools_mapped:
+    input:
+        bam = "sorted_bam/{sample}.{ridx}.bam",
+        sor = "sorted_bam/{sample}.{ridx}.bam.bai",
+        # Dummy input to be sure this step is done
+        sta = "stats/{sample}.{ridx}.mapped.txt"
+    output:
+        temp("mapped_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools view -F 12 -h -b {input.bam} > {output}"
+
+rule picards_rmduplicates:
+    input:
+        "mapped_bam/{sample}.{ridx}.bam"
+    output:
+        bam = temp("rmdup_bam/{sample}.{ridx}.bam"),
+        metric = temp("rmdup_bam/{sample}.{ridx}.metrics.txt")
+    log:
+        "logs/picard/rmdup/{sample}.{ridx}.log"
+    shell:
+        "(picard MarkDuplicates INPUT={input} OUTPUT={output.bam} \
+        REMOVE_DUPLICATES=true METRICS_FILE={output.metric}) 2> {log}" 
+
+rule merge_bam:
+    input:
+        expand("rmdup_bam/{sample}.{ridx}.bam",
+            sample = MERGESAMPS,
+            ridx = MERGEIDXS
+            )
+    output:
+        "merged_bam/{sample}.bam"
+    run:
+        # Multiple bam files : Merge
+        if len(config[wildcards.sample]["reads"]) > 1 :
+            shell("samtools merge {output} {input}"),
+            shell("samtools index {output}")
+        # Only one bam file
+        else :
+            shell("cp {input} {output}")
+            shell("cp {input}.bai {output}.bai")
+
+rule samtools_depth:
+    input:
+        "merged_bam/{sample}.bam"
+    output:
+        "depths/{sample}.tsv.gz"
+    shell:
+        "samtools depth -aa {input} | gzip > {output}"
+
+rule depth_window:
+    input:
+        "depths/{sample}.tsv.gz"
+    output:
+        "stats/{sample}.depth.window.tsv"
+    script:
+        "scripts/window_depth.py"
+
+rule samtools_fasta_idx:
+    input:
+        REFERENCES
+    output:
+        "{input}.fai"
+    shell:
+        "samtools faidx {input}"
+
+rule picard_fasta_dict:
+    input:
+        REFERENCES
+    output:
+        REFERENCESDICT
+    shell:
+        "picard CreateSequenceDictionary REFERENCE={input}"
+
+rule gatk_call:
+    input:
+        bamfile = "merged_bam/{sample}.bam",
+        stats = "stats/{sample}.depth.window.tsv",
+        reference = lambda wildcards: config[wildcards.sample]["reference"],
+        # Dummy inputs
+        rfai = lambda wildcards: config[wildcards.sample]["reference"] + ".fai",
+        rdic = lambda wildcards: os.path.splitext(config[wildcards.sample]["reference"])[0] + ".dict"
+    output:
+        "vcf/{sample}.{ploidy}.vcf"
+    log:
+        "logs/gatk/{sample}.{ploidy}.log"
+    shell:
+        "(gatk HaplotypeCaller -R {input.reference} -I {input.bamfile} \
+        -O {output} -ploidy {wildcards.ploidy}) 2> {log}" 
