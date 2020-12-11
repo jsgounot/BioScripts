@@ -1,6 +1,6 @@
 # Mapping stat
 
-Snakefile to get basic mapping stats from sam file
+Snakemake pipeline to get basic mapping stats from sam file
 Can be easily merged to another pipeline.
 
 # Process

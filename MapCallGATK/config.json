@@ -3,7 +3,7 @@
 		"reads" : [
 			[
 				"/path/to/pair/1.fastq.gz",
-				"/path/to.pair/2.fastq.gz"
+				"/path/to/pair/2.fastq.gz"
 			],
 
 			[
