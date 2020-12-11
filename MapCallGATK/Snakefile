@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 configfile: "config.json"
 
 def make_outfiles(config) :
@@ -19,18 +21,17 @@ def make_outfiles(config) :
     return samples, ploidies
 
 def make_bam_merge_idx(config) :
-    samples, midxs = [], []
+    samples = defaultdict(list)
     for sample, sdata in config.items() :
         if not "reads" in sdata :
             raise Exception("A sample must have at least on reads group")
         for i in range(len(sdata["reads"])) :
-            samples.append(sample)
-            midxs.append(i)
+            samples[sample].append(i)
 
-    return samples, midxs
+    return samples
 
 SAMPLES, PLOIDIES = make_outfiles(config)
-MERGESAMPS, MERGEIDXS = make_bam_merge_idx(config)
+SAMPLESIDX = make_bam_merge_idx(config)
 REFERENCES = list(set(sdata["reference"] for sdata in config.values()))
 REFERENCESDICT = [os.path.splitext(ref)[0] + ".dict" for ref in REFERENCES]
 
@@ -131,25 +132,29 @@ rule picards_rmduplicates:
 
 rule merge_bam:
     input:
-        expand("rmdup_bam/{sample}.{ridx}.bam",
-            sample = MERGESAMPS,
-            ridx = MERGEIDXS
-            )
+        lambda wc : ["rmdup_bam/%s.%i.bam" %(wc.sample, ridx)
+            for ridx in SAMPLESIDX[wc.sample]]
     output:
         "merged_bam/{sample}.bam"
     run:
         # Multiple bam files : Merge
         if len(config[wildcards.sample]["reads"]) > 1 :
-            shell("samtools merge {output} {input}"),
-            shell("samtools index {output}")
+            shell("samtools merge {output} {input}")
         # Only one bam file
         else :
             shell("cp {input} {output}")
-            shell("cp {input}.bai {output}.bai")
+
+rule samtools_reindex:
+    input:
+        "merged_bam/{sample}.bam"
+    output:
+        "merged_bam/{sample}.bam.bai"
+    shell:
+        "samtools index {input}"
 
 rule samtools_depth:
     input:
-        "merged_bam/{sample}.bam"
+        "merged_bam/{sample}.bam",
     output:
         "depths/{sample}.tsv.gz"
     shell:
@@ -177,7 +182,7 @@ rule picard_fasta_dict:
     output:
         REFERENCESDICT
     shell:
-        "picard CreateSequenceDictionary REFERENCE={input}"
+        "picard CreateSequenceDictionary -REFERENCE {input}"
 
 rule gatk_call:
     input:
@@ -185,6 +190,7 @@ rule gatk_call:
         stats = "stats/{sample}.depth.window.tsv",
         reference = lambda wildcards: config[wildcards.sample]["reference"],
         # Dummy inputs
+        bai = "merged_bam/{sample}.bam.bai",
         rfai = lambda wildcards: config[wildcards.sample]["reference"] + ".fai",
         rdic = lambda wildcards: os.path.splitext(config[wildcards.sample]["reference"])[0] + ".dict"
     output:
