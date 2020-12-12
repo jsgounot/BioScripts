@@ -4,6 +4,8 @@ Basic snakemake mapping and calling process. This pipeline manages on its own re
 
 [Download only this directory](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/jsgounot/BioScripts/tree/main/MapCallGATK)
 
+**Note** : Please be sure to add proper right to scripts/mapped.stat.sh before running this pipeline !
+
 # Dependancies
 
 * snakemake
@@ -13,8 +15,9 @@ Basic snakemake mapping and calling process. This pipeline manages on its own re
 * gatk
 * picard
 * samtools
+* rtg (tools)
 
-All softwares listed above must be executable with their name as indicated. Note that this pipeline is done for GATK 4.
+All softwares listed above must be executable with their name as indicated and can be downloaded as such using conda. Note that this pipeline is done for GATK 4.
 
 Tested on :
 * bwa  0.7.17-r1188
@@ -39,8 +42,8 @@ You can specify either one ploidy (gatk variant calling) by specifying an intege
 This pipeline produces some stats :
 * Prc of mapped reads
 * Windows coverage depth
+* VCF stats
 
-See [this page](https://github.com/jsgounot/BioScripts/tree/main/MappingStat) for more informations and see how to configure these scripts. 
+See [this page](https://github.com/jsgounot/BioScripts/tree/main/MappingStat) for more informations and see how to configure the first two scripts. 
 
-**Note** : Please be sure to add proper right to scripts/mapped.stat.sh before running this pipeline !
-
+For VCF statistic, the first file is produced using rtg tool `vcfstats` command. This file is further extended using a python script to show the number of variants per kb.

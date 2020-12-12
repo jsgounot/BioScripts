@@ -39,7 +39,7 @@ REFERENCESDICT = [os.path.splitext(ref)[0] + ".dict" for ref in REFERENCES]
 
 rule all:
     input:
-        expand("vcf/{sample}.{ploidy}.vcf", zip, 
+        expand("stats/vcf/{sample}.{ploidy}.vcf.stat.improved.txt", zip, 
             sample=SAMPLES, ploidy=PLOIDIES)
 
 rule bwa_idx :
@@ -103,7 +103,7 @@ rule stat_mapped:
     input:
         "sorted_bam/{sample}.{ridx}.bam"
     output:
-        "stats/{sample}.{ridx}.mapped.txt"
+        "stats/mapping/{sample}.{ridx}.mapped.txt"
     shell:
         "scripts/mapped.stat.sh {input} > {output}"
 
@@ -112,7 +112,7 @@ rule samtools_mapped:
         bam = "sorted_bam/{sample}.{ridx}.bam",
         sor = "sorted_bam/{sample}.{ridx}.bam.bai",
         # Dummy input to be sure this step is done
-        sta = "stats/{sample}.{ridx}.mapped.txt"
+        sta = "stats/mapping/{sample}.{ridx}.mapped.txt"
     output:
         temp("mapped_bam/{sample}.{ridx}.bam")
     shell:
@@ -164,7 +164,7 @@ rule depth_window:
     input:
         "depths/{sample}.tsv.gz"
     output:
-        "stats/{sample}.depth.window.tsv"
+        "stats/depth/{sample}.depth.window.tsv"
     script:
         "scripts/window_depth.py"
 
@@ -187,7 +187,7 @@ rule picard_fasta_dict:
 rule gatk_call:
     input:
         bamfile = "merged_bam/{sample}.bam",
-        stats = "stats/{sample}.depth.window.tsv",
+        stats = "stats/depth/{sample}.depth.window.tsv",
         reference = lambda wildcards: config[wildcards.sample]["reference"],
         # Dummy inputs
         bai = "merged_bam/{sample}.bam.bai",
@@ -200,3 +200,20 @@ rule gatk_call:
     shell:
         "(gatk HaplotypeCaller -R {input.reference} -I {input.bamfile} \
         -O {output} -ploidy {wildcards.ploidy}) 2> {log}" 
+
+rule rtg_vcfstats:
+    input:
+        "vcf/{sample}.{ploidy}.vcf"
+    output:
+        "stats/vcf/{sample}.{ploidy}.vcf.stat.txt"
+    shell:
+        "rtg vcfstats {input} > {output}"
+
+rule improve_vcfstat:
+    input:
+        vcfstat   = "stats/vcf/{sample}.{ploidy}.vcf.stat.txt",
+        reference = lambda wildcards: config[wildcards.sample]["reference"]
+    output:
+        "stats/vcf/{sample}.{ploidy}.vcf.stat.improved.txt"
+    script:
+        "scripts/vcfstatsimp.py"
