@@ -1,4 +1,4 @@
-# MapCallGATKs
+# Mapping stat
 
 Basic snakemake mapping and calling process. This pipeline manages on its own reference index. You can specify one or multiple set of reads for one sample.
 
@@ -8,12 +8,8 @@ Basic snakemake mapping and calling process. This pipeline manages on its own re
 
 # Dependancies
 
-Python
-
 * snakemake
 * python pandas
-
-Softwares
 
 * bwa
 * gatk
