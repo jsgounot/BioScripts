@@ -14,6 +14,37 @@ import pandas as pd
 try : import tqdm; USETQDM = True
 except ImportError : USETQDM = False
 
+class ReadsGroup(object) :
+    def __init__(self, start=None, stop=None, snps=None) :
+        self.start = start
+        self.stop = stop
+        self.snps = snps or set()
+
+    @property   
+    def nsnps(self) :
+        return len(self.snps)
+
+    def isdisjoint(self, element) :
+        return self.snps.isdisjoint(element.snps)
+
+    @staticmethod
+    def getminmax(v1, v2, fun) :
+        value = None
+        if v1 is not None :
+            value = v1
+        if v2 is not None :
+            if value is None :
+                value = v2
+            else :
+                value = fun((v1, v2))
+        return value
+
+    def __ior__(self, other) :
+        start = ReadsGroup.getminmax(self.start, other.start, min)
+        stop  = ReadsGroup.getminmax(self.stop, other.stop, max)
+        snps  = self.snps | other.snps
+        return ReadsGroup(start, stop, snps)
+
 def extract_snps(vcffile) :
     """
     Extract SNPs positions based on a vcf file
@@ -58,7 +89,12 @@ def iter_reads(snps, bamfile) :
             if len(overlapp) < 2 : continue
 
             name = read.query_name
-            yield contig, name, overlapp
+
+            start = min(read_positions)
+            stop  = max(read_positions)
+            rg = ReadsGroup(start, stop, overlapp)
+
+            yield contig, name, rg
 
 
 def get_windows(snps, bamfile) :
@@ -70,14 +106,14 @@ def get_windows(snps, bamfile) :
     """
     results = defaultdict(list)
     
-    for contig, name, overlapp in iter_reads(snps, bamfile) :   
+    for contig, name, rg in iter_reads(snps, bamfile) :   
         try :
-            if results[contig][-1] & overlapp :
-                results[contig][-1] |= overlapp 
+            if not results[contig][-1].isdisjoint(rg) :
+                results[contig][-1] |= rg 
             else :
-                results[contig].append(overlapp)
+                results[contig].append(rg)
         except IndexError :
-            results[contig].append(overlapp)
+            results[contig].append(rg)
 
     return results
 
@@ -87,15 +123,15 @@ def get_windows_chimerics(snps, bamfile) :
     Does not perform any merging operation between reads
     Need to use merge function for this
     """
-    data = defaultdict(lambda : defaultdict(set))
-    for contig, name, overlapp in iter_reads(snps, bamfile) :
-        data[contig][name] |= overlapp
+    data = defaultdict(lambda : defaultdict(ReadsGroup))
+    for contig, name, rg in iter_reads(snps, bamfile) :
+        data[contig][name] |= rg
 
     data = {contig : list(value.values()) for contig, value in data.items()}
 
     return data
 
-def merge(contig, sets):
+def merge(contig, rgs):
     # https://stackoverflow.com/questions/9110837/python-simple-list-merging-based-on-intersections
     print (f"Merge contig for : {contig}")
 
@@ -103,26 +139,27 @@ def merge(contig, sets):
     while merged:
         merged = False
         results = []
-        while sets:
-            common, rest = sets[0], sets[1:]
-            sets = []
+        while rgs:
+            common, rest = rgs[0], rgs[1:]
+            rgs = []
             for x in rest:
                 if x.isdisjoint(common):
-                    sets.append(x)
+                    rgs.append(x)
                 else:
                     merged = True
                     common |= x
             results.append(common)
-        sets = results
-    return sets
+        rgs = results
+    return rgs
 
-def merge_windows(cwindows) :
+def merge_windows(crgs) :
     # Merge overlapping windows in case of unsorted bam
-    return {contig : merge(contig, windows) for contig, windows in cwindows.items()}
+    return {contig : merge(contig, rgs) for contig, rgs in crgs.items()}
 
-def w2df(cwindows) :
-    data = ({"Contig" : contig, "Start" : min(window), "Stop" : max(window), "#SNPs" : len(window)}
-            for contig, windows in cwindows.items() for window in windows)
+def w2df(crgs) :
+    data = ({"Contig" : contig, "Start" : rg.start, "Stop" : rg.stop, "#SNPs" : rg.nsnps,
+             "MinSNP" : min(rg.snps), "MaxSNP" : max(rg.snps)}
+            for contig, rgs in crgs.items() for rg in rgs)
     
     df = pd.DataFrame(data)
     df["Size"] = df["Stop"] - df["Start"]
@@ -140,17 +177,31 @@ def run(vcf, bam, sortedbam, chimeric) :
     snps = extract_snps(vcf)
     
     if chimeric :
-        cwindows = get_windows_chimerics(snps, bam)
+        crgs = get_windows_chimerics(snps, bam)
     else :
-        cwindows = get_windows(snps, bam)
+        crgs = get_windows(snps, bam)
 
     if sortedbam == False or chimeric == True :
-        cwindows = merge_windows(cwindows)
+        crgs = merge_windows(crgs)
 
-    df = w2df(cwindows)
+    df = w2df(crgs)
 
     with pd.option_context('display.max_rows', None, 'display.max_columns', None) :
         print(df)
 
 if __name__ == "__main__" :
     run()
+
+
+"""
+        Contig  Start    Stop  #SNPs    Size
+0  chromosome2    102   29530    361   29428
+1  chromosome2  31168   31676     13     508
+2  chromosome2  35631   35840     11     209
+3  chromosome2  35868   36158      4     290
+4  chromosome2  36343  812497   7681  776154
+
+        Contig  Start    Stop  #SNPs    Size
+0  chromosome2    102  812497   8057  812395
+1  chromosome2  31168   31676     13     508
+"""
