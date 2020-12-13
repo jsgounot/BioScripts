@@ -191,17 +191,3 @@ def run(vcf, bam, sortedbam, chimeric) :
 
 if __name__ == "__main__" :
     run()
-
-
-"""
-        Contig  Start    Stop  #SNPs    Size
-0  chromosome2    102   29530    361   29428
-1  chromosome2  31168   31676     13     508
-2  chromosome2  35631   35840     11     209
-3  chromosome2  35868   36158      4     290
-4  chromosome2  36343  812497   7681  776154
-
-        Contig  Start    Stop  #SNPs    Size
-0  chromosome2    102  812497   8057  812395
-1  chromosome2  31168   31676     13     508
-"""
