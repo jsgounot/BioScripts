@@ -40,8 +40,13 @@ REFERENCESDICT = [os.path.splitext(ref)[0] + ".dict" for ref in REFERENCES]
 rule all:
     input:
         expand("stats/vcf/{sample}.{ploidy}.vcf.stat.improved.txt", zip, 
-            sample=SAMPLES, ploidy=PLOIDIES)
+            sample=SAMPLES, ploidy=PLOIDIES),
 
+        expand("stats/depth/{sample}.depth.window.tsv", sample=SAMPLES),
+
+        lambda wc : ["stats/mapping/%s.%i.mapped.txt" %(sample, ridx)
+            for sample in SAMPLES for ridx in SAMPLESIDX[sample]]
+        
 rule bwa_idx :
     input:
         REFERENCES
@@ -111,8 +116,6 @@ rule samtools_mapped:
     input:
         bam = "sorted_bam/{sample}.{ridx}.bam",
         sor = "sorted_bam/{sample}.{ridx}.bam.bai",
-        # Dummy input to be sure this step is done
-        sta = "stats/mapping/{sample}.{ridx}.mapped.txt"
     output:
         temp("mapped_bam/{sample}.{ridx}.bam")
     shell:
@@ -187,7 +190,6 @@ rule picard_fasta_dict:
 rule gatk_call:
     input:
         bamfile = "merged_bam/{sample}.bam",
-        stats = "stats/depth/{sample}.depth.window.tsv",
         reference = lambda wildcards: config[wildcards.sample]["reference"],
         # Dummy inputs
         bai = "merged_bam/{sample}.bam.bai",
