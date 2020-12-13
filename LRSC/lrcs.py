@@ -41,6 +41,26 @@ def extract_snps(vcffile) :
 
     return data
 
+def iter_reads(snps, bamfile) :
+    print (f"Read bam file file : {bamfile}")
+    bamdata = pysam.AlignmentFile(bamfile, "rb")
+
+    for contig, sites in snps.items() :
+        snps_positions = set(sites)
+
+        if USETQDM : iterator = tqdm.tqdm(bamdata.fetch(contig), total=bamdata.count(contig))
+        else : iterator = bamdata.fetch(contig)
+
+        for read in iterator :
+            # we search for SNPs position
+            read_positions = set(read.get_reference_positions())
+            overlapp = read_positions & snps_positions
+            if len(overlapp) < 2 : continue
+
+            name = read.query_name
+            yield contig, name, overlapp
+
+
 def get_windows(snps, bamfile) :
     """
     Select SNPs based on the rule descibe above
@@ -48,33 +68,32 @@ def get_windows(snps, bamfile) :
         snps {dict} -- SNPs position and allele provided by extract_snps
         bamfile {str} -- Bam file path
     """
-    print (f"Read bam file file : {bamfile}")
-
     results = defaultdict(list)
-    bamdata = pysam.AlignmentFile(bamfile, "rb")
-    for contig, sites in snps.items() :
-        snps_positions = set(sites)
-        found = set()
-
-        if USETQDM : iterator = tqdm.tqdm(bamdata.fetch(contig), total=bamdata.count(contig))
-        else : iterator = bamdata.fetch(contig)
-
-        for read in iterator :
-            
-            # we search for SNPs position
-            read_positions = set(read.get_reference_positions())
-            overlapp = read_positions & snps_positions
-            if len(overlapp) < 2 : continue
-
-            try :
-                if results[contig][-1] & overlapp :
-                    results[contig][-1] |= overlapp 
-                else :
-                    results[contig].append(overlapp)
-            except IndexError :
+    
+    for contig, name, overlapp in iter_reads(snps, bamfile) :   
+        try :
+            if results[contig][-1] & overlapp :
+                results[contig][-1] |= overlapp 
+            else :
                 results[contig].append(overlapp)
+        except IndexError :
+            results[contig].append(overlapp)
 
     return results
+
+def get_windows_chimerics(snps, bamfile) :
+    """
+    Return all position for all read name
+    Does not perform any merging operation between reads
+    Need to use merge function for this
+    """
+    data = defaultdict(lambda : defaultdict(set))
+    for contig, name, overlapp in iter_reads(snps, bamfile) :
+        data[contig][name] |= overlapp
+
+    data = {contig : list(value.values()) for contig, value in data.items()}
+
+    return data
 
 def merge(contig, sets):
     # https://stackoverflow.com/questions/9110837/python-simple-list-merging-based-on-intersections
@@ -114,12 +133,18 @@ def w2df(cwindows) :
 @click.option("--vcf", required=True, type=str)
 @click.option("--bam", required=True, type=str)
 @click.option("--sortedbam", required=True, is_flag=True, default=False)
-def run(vcf, bam, sortedbam) :
+@click.option("--chimeric", required=True, is_flag=True, default=False)
+def run(vcf, bam, sortedbam, chimeric) :
     print (f"Work with : {vcf}")
+
     snps = extract_snps(vcf)
-    cwindows = get_windows(snps, bam)
     
-    if not sortedbam :
+    if chimeric :
+        cwindows = get_windows_chimerics(snps, bam)
+    else :
+        cwindows = get_windows(snps, bam)
+
+    if sortedbam == False or chimeric == True :
         cwindows = merge_windows(cwindows)
 
     df = w2df(cwindows)
