@@ -4,7 +4,7 @@ A python script to determine (Long Reads) connectivity with SNPs. While this scr
 
 ## Context
 
-Some phasing tools such as [gretel](https://github.com/SamStudio8/gretel) or [nPhase](https://github.com/OmarOakheart/nPhase) rely on shared polymorphic sites between reads to either determine a path along the reference or to fuse reads together. This tools provides a way to get all best scenario paths, meaning all windows of your genome which are covered by reads sharing at least one polymorphic site. While the results does not give you information on the actual results of these tools, it will let you to know if your input file is suitable for such analyses.
+Some phasing tools such as [gretel](https://github.com/SamStudio8/gretel) or [nPhase](https://github.com/OmarOakheart/nPhase) rely on shared polymorphic sites between reads to either determine a path along the reference or to fuse reads together. This tools provides a way to get all best scenario paths, meaning all windows of your genome which are covered by reads sharing at least one polymorphic site. While the results does not give you information on the actual results of these tools, it will let you know if your input file is suitable for such analyses.
 
 ## Dependancies
 
