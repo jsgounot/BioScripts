@@ -26,4 +26,4 @@ Note that your vcf file might not originated from your bamfile, for instance if 
 
 `python lrcs.py --bam bamfile --vcf vcffile`
 
-It is recommanded to sort your bamfile before this script. By default, lrcs will consider it is not, leading to a supplementary merging step. If you bamefile is sorted, you can avoid this step by using the `--sortedbam` flag.
+It is recommanded to sort your bamfile before this script. By default, lrcs will consider it is not, leading to a supplementary merging step. If you bamfile is sorted, you can avoid this step by using the `--sortedbam` flag.
