@@ -1,6 +1,6 @@
 # MapCallGATK
 
-Basic snakemake mapping and calling process for short reads using [GATK4](https://gatk.broadinstitute.org/hc/en-us). This pipeline manages on its own reference index. You can specify one or multiple set of reads for one sample. For long reads, see [CallMapNGLMR](https://github.com/jsgounot/BioScripts/tree/main/MapCallNGMLR).
+Basic snakemake mapping and calling process for short reads using [GATK4](https://gatk.broadinstitute.org/hc/en-us). This pipeline manages on its own reference index. You can specify one or multiple set of reads for one sample. For long reads, see [MapCallNGLMR](https://github.com/jsgounot/BioScripts/tree/main/MapCallNGMLR).
 
 [Download only this directory](https://minhaskamal.github.io/DownGit/#/home?url=https://github.com/jsgounot/BioScripts/tree/main/MapCallGATK)
 
