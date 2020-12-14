@@ -1,0 +1,225 @@
+from collections import defaultdict
+
+configfile: "config.json"
+
+def make_outfiles(config) :
+    samples, ploidies = [], []
+    for sample, sdata in config.items() :
+        ploidy = sdata["ploidy"]
+        if isinstance(ploidy, int) :
+            samples.append(sample)
+            ploidies.append(ploidy)
+        elif isinstance(ploidy, list) :
+            for element in ploidy :
+                if not isinstance(element, int) :
+                    raise Exception("Ploidy must be an integer or a list of integers")
+                samples.append(sample)
+                ploidies.append(element)
+        else :  
+            raise Exception("Ploidy must be an integer or a list of integers")
+
+    return samples, ploidies
+
+def make_bam_merge_idx(config) :
+    samples = defaultdict(list)
+    for sample, sdata in config.items() :
+        if not "reads" in sdata :
+            raise Exception("A sample must have at least on reads group")
+        for i in range(len(sdata["reads"])) :
+            samples[sample].append(i)
+
+    return samples
+
+SAMPLES, PLOIDIES = make_outfiles(config)
+SAMPLESIDX = make_bam_merge_idx(config)
+REFERENCES = list(set(sdata["reference"] for sdata in config.values()))
+REFERENCESDICT = [os.path.splitext(ref)[0] + ".dict" for ref in REFERENCES]
+
+# -------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        expand("stats/vcf/{sample}.{ploidy}.vcf.stat.improved.txt", zip, 
+            sample=SAMPLES, ploidy=PLOIDIES),
+
+        expand("stats/depth/{sample}.depth.window.tsv", sample=SAMPLES),
+
+        lambda wc : ["stats/mapping/%s.%i.mapped.txt" %(sample, ridx)
+            for sample in SAMPLES for ridx in SAMPLESIDX[sample]]
+        
+rule bwa_idx :
+    input:
+        REFERENCES
+    output:
+        "{input}.amb"
+    shell:
+        "bwa index {input}"
+
+rule ngmlr:
+    input:
+        reads = lambda wildcards: config[wildcards.sample]["reads"][int(wildcards.ridx)],
+        reference = lambda wildcards: config[wildcards.sample]["reference"],
+        # Dummy input for indexing (necessary ?)
+        reference_idx = lambda wildcards: config[wildcards.sample]["reference"] + ".amb"
+    params:
+        lrp = lambda wildcards: config[wildcards.sample].get("longReadPlatform", "ont"),
+        sample = lambda wildcards : wildcards.sample,
+        ridx = lambda wildcards : wildcards.ridx
+    output:
+        temp("ngmlr/{sample}.{ridx}.sam")
+    threads: 
+        2
+    log:
+        "logs/ngmlr/{sample}.{ridx}.log"
+    shell:
+        "(ngmlr -t {threads} -x {params.lrp} -r {input.reference} -q {input.reads} -o {output} \
+        --rg-id {params.sample} --rg-lb {params.ridx} --rg-sm {params.sample}) 2> {log}"
+
+rule samtools_sort_names:
+    input:
+        "ngmlr/{sample}.{ridx}.sam"
+    output:
+        temp("sorted_names_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools sort -n -o {output} {input}"
+
+
+rule samtools_fixmate:
+    input:
+        "sorted_names_bam/{sample}.{ridx}.bam"
+    output:
+        temp("fixmate_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools fixmate {input} {output}"
+
+rule samtools_sort_coordinates:
+    input:
+        "fixmate_bam/{sample}.{ridx}.bam"
+    output:
+        "sorted_bam/{sample}.{ridx}.bam"
+    shell:
+        "samtools sort -o {output} {input}"
+
+rule samtools_index:
+    input:
+        "sorted_bam/{sample}.{ridx}.bam"
+    output:
+        "sorted_bam/{sample}.{ridx}.bam.bai"
+    shell:
+        "samtools index {input}"
+
+rule stat_mapped:
+    input:
+        "sorted_bam/{sample}.{ridx}.bam"
+    output:
+        "stats/mapping/{sample}.{ridx}.mapped.txt"
+    shell:
+        "scripts/mapped.stat.sh {input} > {output}"
+
+rule samtools_mapped:
+    input:
+        bam = "sorted_bam/{sample}.{ridx}.bam",
+        sor = "sorted_bam/{sample}.{ridx}.bam.bai",
+    output:
+        temp("mapped_bam/{sample}.{ridx}.bam")
+    shell:
+        "samtools view -F 12 -h -b {input.bam} > {output}"
+
+rule picards_rmduplicates:
+    input:
+        "mapped_bam/{sample}.{ridx}.bam"
+    output:
+        bam = temp("rmdup_bam/{sample}.{ridx}.bam"),
+        metric = temp("rmdup_bam/{sample}.{ridx}.metrics.txt")
+    log:
+        "logs/picard/rmdup/{sample}.{ridx}.log"
+    shell:
+        "(picard MarkDuplicates INPUT={input} OUTPUT={output.bam} \
+        REMOVE_DUPLICATES=true METRICS_FILE={output.metric}) 2> {log}" 
+
+rule merge_bam:
+    input:
+        lambda wc : ["rmdup_bam/%s.%i.bam" %(wc.sample, ridx)
+            for ridx in SAMPLESIDX[wc.sample]]
+    output:
+        "merged_bam/{sample}.bam"
+    run:
+        # Multiple bam files : Merge
+        if len(config[wildcards.sample]["reads"]) > 1 :
+            shell("samtools merge {output} {input}")
+        # Only one bam file
+        else :
+            shell("cp {input} {output}")
+
+rule samtools_reindex:
+    input:
+        "merged_bam/{sample}.bam"
+    output:
+        "merged_bam/{sample}.bam.bai"
+    shell:
+        "samtools index {input}"
+
+rule samtools_depth:
+    input:
+        "merged_bam/{sample}.bam",
+    output:
+        "depths/{sample}.tsv.gz"
+    shell:
+        "samtools depth -aa {input} | gzip > {output}"
+
+rule depth_window:
+    input:
+        "depths/{sample}.tsv.gz"
+    output:
+        "stats/depth/{sample}.depth.window.tsv"
+    script:
+        "scripts/window_depth.py"
+
+rule samtools_fasta_idx:
+    input:
+        REFERENCES
+    output:
+        "{input}.fai"
+    shell:
+        "samtools faidx {input}"
+
+rule picard_fasta_dict:
+    input:
+        REFERENCES
+    output:
+        REFERENCESDICT
+    shell:
+        "picard CreateSequenceDictionary -REFERENCE {input}"
+
+rule gatk_call:
+    input:
+        bamfile = "merged_bam/{sample}.bam",
+        reference = lambda wildcards: config[wildcards.sample]["reference"],
+        # Dummy inputs
+        bai = "merged_bam/{sample}.bam.bai",
+        rfai = lambda wildcards: config[wildcards.sample]["reference"] + ".fai",
+        rdic = lambda wildcards: os.path.splitext(config[wildcards.sample]["reference"])[0] + ".dict"
+    output:
+        "vcf/{sample}.{ploidy}.vcf"
+    log:
+        "logs/gatk/{sample}.{ploidy}.log"
+    shell:
+        "(gatk HaplotypeCaller -R {input.reference} -I {input.bamfile} \
+        -O {output} -ploidy {wildcards.ploidy}) 2> {log}" 
+
+rule rtg_vcfstats:
+    input:
+        "vcf/{sample}.{ploidy}.vcf"
+    output:
+        "stats/vcf/{sample}.{ploidy}.vcf.stat.txt"
+    shell:
+        "rtg vcfstats {input} > {output}"
+
+rule improve_vcfstat:
+    input:
+        vcfstat   = "stats/vcf/{sample}.{ploidy}.vcf.stat.txt",
+        reference = lambda wildcards: config[wildcards.sample]["reference"]
+    output:
+        "stats/vcf/{sample}.{ploidy}.vcf.stat.improved.txt"
+    script:
+        "scripts/vcfstatsimp.py"
