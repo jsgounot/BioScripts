@@ -6,6 +6,7 @@ Collection of fasta tools :
 * `extact` : Extract fasta sequence
 * `generate` : Generate random fasta sequences
 * `info` : Display sequences informations
+* `compare` : Compare the exact matches between two fasta files
 
 ## Requirements and install
 
