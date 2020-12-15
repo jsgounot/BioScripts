@@ -33,9 +33,9 @@ def qcor(record) :
      return record
 
 def run(files, minsize=0, maxsize=0, start=-1, end=-1, names=[], revcomp=False, ncount=0, rand=False, 
-    bcorrect=False, sort=None, reverse=False) :
+    correct=False, sort=None, reverse=False, ** fkwargs) :
 
-    fdata = chain(* (fdata for fname, fdata in iter_fdata(files)))
+    fdata = chain(* (fdata for fname, fdata in iter_fdata(files, ** fkwargs)))
 
     if minsize :
         fdata = (record for record in fdata if len(record.seq) >= minsize)
@@ -46,7 +46,7 @@ def run(files, minsize=0, maxsize=0, start=-1, end=-1, names=[], revcomp=False, 
     if names :
         fdata = (record for record in fdata if record.id in names)
 
-    if bcorrect :
+    if correct :
         fdata = (qcor(record) for record in fdata)
 
     if start > 0 or end > 0 :

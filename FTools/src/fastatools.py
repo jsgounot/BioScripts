@@ -77,6 +77,7 @@ def generate(* args, ** kwargs) :
 @click.option('--head', type=int, help="N first rows to display", default=0)
 @click.option('--names', type=str, multiple=True, help="Extract only provided header names")
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
+@click.option('--basecount', help="Return basecount instead", is_flag=True)
 def info(* args, ** kwargs) :
     infoc.run(* args, ** kwargs)
 
