@@ -61,7 +61,7 @@ rule bwa_mem:
         reference = lambda wildcards: config[wildcards.sample]["reference"],
         reference_idx = lambda wildcards: config[wildcards.sample]["reference"] + ".amb"
     output:
-        temp("bwa_mapped/{sample}.{ridx}.bam")
+        temp("data/bwa_mapped/{sample}.{ridx}.bam")
     params:
         rg = "@RG\\tID:{sample}\\tSM:{sample}\\tLB:{ridx}"
     threads: 
@@ -74,39 +74,39 @@ rule bwa_mem:
 
 rule samtools_sort_names:
     input:
-        "bwa_mapped/{sample}.{ridx}.bam"
+        "data/bwa_mapped/{sample}.{ridx}.bam"
     output:
-        temp("sorted_names_bam/{sample}.{ridx}.bam")
+        temp("data/sorted_names_bam/{sample}.{ridx}.bam")
     shell:
         "samtools sort -n -o {output} {input}"
 
 rule samtools_fixmate:
     input:
-        "sorted_names_bam/{sample}.{ridx}.bam"
+        "data/sorted_names_bam/{sample}.{ridx}.bam"
     output:
-        temp("fixmate_bam/{sample}.{ridx}.bam")
+        temp("data/fixmate_bam/{sample}.{ridx}.bam")
     shell:
         "samtools fixmate {input} {output}"
 
 rule samtools_sort_coordinates:
     input:
-        "fixmate_bam/{sample}.{ridx}.bam"
+        "data/fixmate_bam/{sample}.{ridx}.bam"
     output:
-        "sorted_bam/{sample}.{ridx}.bam"
+        "data/sorted_bam/{sample}.{ridx}.bam"
     shell:
         "samtools sort -o {output} {input}"
 
 rule samtools_index:
     input:
-        "sorted_bam/{sample}.{ridx}.bam"
+        "data/sorted_bam/{sample}.{ridx}.bam"
     output:
-        "sorted_bam/{sample}.{ridx}.bam.bai"
+        "data/sorted_bam/{sample}.{ridx}.bam.bai"
     shell:
         "samtools index {input}"
 
 rule stat_mapped:
     input:
-        "sorted_bam/{sample}.{ridx}.bam"
+        "data/sorted_bam/{sample}.{ridx}.bam"
     output:
         "stats/mapping/{sample}.{ridx}.mapped.txt"
     shell:
@@ -114,19 +114,19 @@ rule stat_mapped:
 
 rule samtools_mapped:
     input:
-        bam = "sorted_bam/{sample}.{ridx}.bam",
-        sor = "sorted_bam/{sample}.{ridx}.bam.bai",
+        bam = "data/sorted_bam/{sample}.{ridx}.bam",
+        sor = "data/sorted_bam/{sample}.{ridx}.bam.bai",
     output:
-        temp("mapped_bam/{sample}.{ridx}.bam")
+        temp("data/mapped_bam/{sample}.{ridx}.bam")
     shell:
         "samtools view -F 12 -h -b {input.bam} > {output}"
 
 rule picards_rmduplicates:
     input:
-        "mapped_bam/{sample}.{ridx}.bam"
+        "data/mapped_bam/{sample}.{ridx}.bam"
     output:
-        bam = temp("rmdup_bam/{sample}.{ridx}.bam"),
-        metric = temp("rmdup_bam/{sample}.{ridx}.metrics.txt")
+        bam = temp("data/rmdup_bam/{sample}.{ridx}.bam"),
+        metric = temp("data/rmdup_bam/{sample}.{ridx}.metrics.txt")
     log:
         "logs/picard/rmdup/{sample}.{ridx}.log"
     shell:
@@ -135,10 +135,10 @@ rule picards_rmduplicates:
 
 rule merge_bam:
     input:
-        lambda wc : ["rmdup_bam/%s.%i.bam" %(wc.sample, ridx)
+        lambda wc : ["data/rmdup_bam/%s.%i.bam" %(wc.sample, ridx)
             for ridx in SAMPLESIDX[wc.sample]]
     output:
-        "merged_bam/{sample}.bam"
+        "data/merged_bam/{sample}.bam"
     run:
         # Multiple bam files : Merge
         if len(config[wildcards.sample]["reads"]) > 1 :
@@ -149,23 +149,23 @@ rule merge_bam:
 
 rule samtools_reindex:
     input:
-        "merged_bam/{sample}.bam"
+        "data/merged_bam/{sample}.bam"
     output:
-        "merged_bam/{sample}.bam.bai"
+        "data/merged_bam/{sample}.bam.bai"
     shell:
         "samtools index {input}"
 
 rule samtools_depth:
     input:
-        "merged_bam/{sample}.bam",
+        "data/merged_bam/{sample}.bam",
     output:
-        "depths/{sample}.tsv.gz"
+        "data/depths/{sample}.tsv.gz"
     shell:
         "samtools depth -aa {input} | gzip > {output}"
 
 rule depth_window:
     input:
-        "depths/{sample}.tsv.gz"
+        "data/depths/{sample}.tsv.gz"
     output:
         "stats/depth/{sample}.depth.window.tsv"
     script:
@@ -189,14 +189,14 @@ rule picard_fasta_dict:
 
 rule gatk_call:
     input:
-        bamfile = "merged_bam/{sample}.bam",
+        bamfile = "data/merged_bam/{sample}.bam",
         reference = lambda wildcards: config[wildcards.sample]["reference"],
         # Dummy inputs
-        bai = "merged_bam/{sample}.bam.bai",
+        bai = "data/merged_bam/{sample}.bam.bai",
         rfai = lambda wildcards: config[wildcards.sample]["reference"] + ".fai",
         rdic = lambda wildcards: os.path.splitext(config[wildcards.sample]["reference"])[0] + ".dict"
     output:
-        "vcf/{sample}.{ploidy}.vcf"
+        "data/vcf/{sample}.{ploidy}.vcf"
     log:
         "logs/gatk/{sample}.{ploidy}.log"
     shell:
@@ -205,7 +205,7 @@ rule gatk_call:
 
 rule rtg_vcfstats:
     input:
-        "vcf/{sample}.{ploidy}.vcf"
+        "data/vcf/{sample}.{ploidy}.vcf"
     output:
         "stats/vcf/{sample}.{ploidy}.vcf.stat.txt"
     shell:
