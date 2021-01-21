@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2020-12-08 16:09:13
+# @Last Modified time: 2021-01-21 17:39:09
 
 import os, sys
 
@@ -25,6 +25,7 @@ def cli():
 @click.option('--minsize', type=int, help="Sequence minimum size to consider", default=0)
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--nvalue', type=int, help="N value to consider (N50, N90). Default 50", default=50)
+@click.option('--addfname', help="Add full path to the table", is_flag=True)
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
 def ametric(* args, ** kwargs) :
     ametricc.run(* args, ** kwargs)

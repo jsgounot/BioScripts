@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-01-21 17:31:28
+# @Last Modified time: 2021-01-21 17:45:38
 
 import os, glob
 import pandas as pd
@@ -43,7 +43,7 @@ def ace_info(fsizes, nvalue, refsize=0) :
     return data
 
 
-def run(files, ref, refsize, nvalue=50, ** fkwargs) :
+def run(files, ref, refsize, nvalue=50, addfname=False, ** fkwargs) :
     data = []
 
     if refsize == 0 and ref :
@@ -58,6 +58,7 @@ def run(files, ref, refsize, nvalue=50, ** fkwargs) :
         except AttributeError : name = bname(str(fname))
 
         finfo = {
+            "fname"    : fname,
             "basename" : name, 
             "averageSize" : int(sum(fsizes.values()) / len(fsizes)),
             "seqNumber": len(fsizes), 
@@ -65,11 +66,13 @@ def run(files, ref, refsize, nvalue=50, ** fkwargs) :
             "minSize"  : min(fsizes.values())
         }
 
-
         finfo = dict(** finfo, ** ace_info(fsizes, nvalue, refsize))
         data.append(finfo)
 
     df = pd.DataFrame(data)
+
+    basecols = ["basename", "seqNumber", "minSize", "maxSize", "averageSize"]
+    if addfname : basecols.insert(0, "fname")
 
     cn = lambda x, i : x + str(i)
     nlcols = [cn("N", nvalue), cn("L", nvalue), cn("NG", nvalue), cn("LG", nvalue)]
@@ -79,8 +82,7 @@ def run(files, ref, refsize, nvalue=50, ** fkwargs) :
         for column in ["minSize", "maxSize", "averageSize", "seqNumber"] + nlcols :
             df[column] = df[column].apply(lambda x : '{:,}'.format(x))
     
-        df = df[["basename", "seqNumber", "minSize", "maxSize", "averageSize"] 
-            + nlcols]
+        df = df[basecols + nlcols]
         
         with pd.option_context('display.max_rows', None, 'display.max_columns', None) :
             print(df)
