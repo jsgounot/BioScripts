@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2020-12-08 16:03:37
+# @Last Modified time: 2021-01-21 17:31:28
 
 import os, glob
 import pandas as pd
@@ -82,4 +82,5 @@ def run(files, ref, refsize, nvalue=50, ** fkwargs) :
         df = df[["basename", "seqNumber", "minSize", "maxSize", "averageSize"] 
             + nlcols]
         
-        print(df)
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None) :
+            print(df)
