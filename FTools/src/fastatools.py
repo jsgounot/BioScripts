@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 10:46:46
+# @Last Modified time: 2021-02-17 11:43:59
 
 import os, sys
 
@@ -25,7 +25,8 @@ def cli():
 @click.option('--minsize', type=int, help="Sequence minimum size to consider", default=0)
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--nvalue', type=int, help="N value to consider (N50, N90). Default 50", default=50)
-@click.option('--addfname', help="Add full path to the table", is_flag=True)
+@click.option('--fullname', help="Replace base name with full name", is_flag=True)
+@click.option('--cpath', help="Try to complete the relative path with the absolute path", is_flag=True)
 @click.option('--outfile', type=str, help="Path of the TSV table (default stdout)", default="")
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
 def ametric(* args, ** kwargs) :

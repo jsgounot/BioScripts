@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 11:27:09
+# @Last Modified time: 2021-02-17 11:42:14
 
 import os, glob
 import pandas as pd
@@ -43,7 +43,7 @@ def ace_info(fsizes, nvalue, refsize=0) :
     return data
 
 
-def run(files, ref, refsize, nvalue=50, addfname=False, outfile=None, ** fkwargs) :
+def run(files, ref, refsize, nvalue=50, fullname=False, completepath=False, outfile=None, ** fkwargs) :
     data = []
 
     if refsize == 0 and ref :
@@ -56,6 +56,9 @@ def run(files, ref, refsize, nvalue=50, addfname=False, outfile=None, ** fkwargs
 
         try : name = bname(fname.name)
         except AttributeError : name = bname(str(fname))
+
+        if completepath and os.path.isabs(fname) == False :
+            fname = os.path.join(os.getcwd(), fname)
 
         finfo = {
             "fname"    : fname,
@@ -72,7 +75,7 @@ def run(files, ref, refsize, nvalue=50, addfname=False, outfile=None, ** fkwargs
     df = pd.DataFrame(data)
 
     basecols = ["basename", "seqNumber", "minSize", "maxSize", "averageSize"]
-    if addfname : basecols.insert(0, "fname")
+    if fullname : basecols[0] = "fname"
 
     cn = lambda x, i : x + str(i)
     nlcols = [cn("N", nvalue), cn("L", nvalue), cn("NG", nvalue), cn("LG", nvalue)]
