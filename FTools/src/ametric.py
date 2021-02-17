@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 14:33:02
+# @Last Modified time: 2021-02-17 14:37:25
 
 import os, glob
 import pandas as pd
@@ -63,7 +63,7 @@ def treat_file(fname, fdata, cpath, nvalue, refsize) :
 
     return dict(** finfo, ** ace_info(fsizes, nvalue, refsize))
 
-def run(files, ref, refsize, nvalue=50, fullname=False, cpath=False, outfile=None, ** fkwargs) :
+def run(files, ref, refsize, nvalue=50, nsep=False, fullname=False, cpath=False, outfile=None, ** fkwargs) :
     if refsize == 0 and ref :
         refsize = sum(len(record.seq) 
             for _, fdata in iter_fdata((ref,))
@@ -81,8 +81,9 @@ def run(files, ref, refsize, nvalue=50, fullname=False, cpath=False, outfile=Non
     nlcols = [col for col in nlcols if col in df.columns]
 
     if not df.empty :
-        for column in ["minSize", "maxSize", "averageSize", "seqNumber"] + nlcols :
-            df[column] = df[column].apply(lambda x : '{:,}'.format(x))
+        if nsep :
+            for column in ["minSize", "maxSize", "averageSize", "seqNumber", "totalSize"] + nlcols :
+                df[column] = df[column].apply(lambda x : '{:,}'.format(x))
     
         df = df[basecols + nlcols]
         

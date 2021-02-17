@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 14:01:59
+# @Last Modified time: 2021-02-17 14:39:51
 
 import os, sys
 
@@ -25,6 +25,7 @@ def cli():
 @click.option('--minsize', type=int, help="Sequence minimum size to consider", default=0)
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--nvalue', type=int, help="N value to consider (N50, N90). Default 50", default=50)
+@click.option('--nsep', help="Add separator to numbers", is_flag=True)
 @click.option('--fullname', help="Replace base name with full name", is_flag=True)
 @click.option('--cpath', help="Try to complete the relative path with the absolute path", is_flag=True)
 @click.option('--outfile', type=str, help="Path of the TSV table (default stdout)", default="")
@@ -82,6 +83,7 @@ def generate(* args, ** kwargs) :
 @click.option('--names', type=str, multiple=True, help="Extract only provided header names")
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
 @click.option('--basecount', help="Return basecount instead", is_flag=True)
+@click.option('--nsep', help="Add separator to numbers", is_flag=True)
 def info(* args, ** kwargs) :
     infoc.run(* args, ** kwargs)
 

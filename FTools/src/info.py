@@ -5,7 +5,7 @@ from collections import Counter
 import pandas as pd
 import utils
 
-def run_basecount(files, sort="ID", head=0, ** fkwargs) :
+def run_basecount(files, sort="ID", head=0, nsep=False, ** fkwargs) :
     for fname, fdata in utils.iter_fdata(files, ** fkwargs) :
         fdata = ({"ID" : record.id, ** Counter(record.seq)} for record in fdata)
         df = pd.DataFrame(fdata).fillna(0)
@@ -29,7 +29,7 @@ def run_basecount(files, sort="ID", head=0, ** fkwargs) :
         with pd.option_context('display.max_rows', None, 'display.max_columns', None):  
             print (df)
 
-def run_default(files, sort="ID", head=0, ** fkwargs) :
+def run_default(files, sort="ID", head=0, nsep=False, ** fkwargs) :
     for fname, fdata in utils.iter_fdata(files, ** fkwargs) :
         fdata = ({"ID" : record.id, ** seqinfo(record.seq)} for record in fdata)
         df = pd.DataFrame(fdata)
@@ -48,7 +48,8 @@ def run_default(files, sort="ID", head=0, ** fkwargs) :
             df["%GC"] = df["#GC"] * 100 / df["Length"]
 
             df = df[["ID", "Length", "%GC", "%N"]]
-            df["Length"] = df["Length"].apply(lambda x : '{:,}'.format(x))
+            if nsep : 
+                df["Length"] = df["Length"].apply(lambda x : '{:,}'.format(x))
 
             print (fname)
             with pd.option_context('display.max_rows', None, 'display.max_columns', None):  
@@ -60,6 +61,6 @@ def seqinfo(seq) :
     gc, n, length = seq.count("G") + seq.count("C"), seq.count("N"), len(seq)
     return {"Length" : length, "#GC" : gc, "#N" : n}
  
-def run(files, sort="ID", head=0, basecount=False, ** fkwargs) :
+def run(files, sort="ID", head=0, basecount=False, nsep=False, ** fkwargs) :
     fun = run_basecount if basecount else run_default
-    fun(files, sort, head, ** fkwargs)
+    fun(files, sort, head, nsep, ** fkwargs)
