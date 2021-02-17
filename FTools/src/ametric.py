@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-01-21 17:45:38
+# @Last Modified time: 2021-02-17 11:27:09
 
 import os, glob
 import pandas as pd
@@ -43,7 +43,7 @@ def ace_info(fsizes, nvalue, refsize=0) :
     return data
 
 
-def run(files, ref, refsize, nvalue=50, addfname=False, ** fkwargs) :
+def run(files, ref, refsize, nvalue=50, addfname=False, outfile=None, ** fkwargs) :
     data = []
 
     if refsize == 0 and ref :
@@ -84,5 +84,8 @@ def run(files, ref, refsize, nvalue=50, addfname=False, ** fkwargs) :
     
         df = df[basecols + nlcols]
         
-        with pd.option_context('display.max_rows', None, 'display.max_columns', None) :
-            print(df)
+        if outfile :
+            df.to_csv(outfile, sep="\t", index=False)
+        else :
+            with pd.option_context('display.max_rows', None, 'display.max_columns', None) :
+                print(df)
