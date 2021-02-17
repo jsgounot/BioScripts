@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 11:43:59
+# @Last Modified time: 2021-02-17 14:01:59
 
 import os, sys
 
@@ -29,6 +29,7 @@ def cli():
 @click.option('--cpath', help="Try to complete the relative path with the absolute path", is_flag=True)
 @click.option('--outfile', type=str, help="Path of the TSV table (default stdout)", default="")
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
+@click.option('--ncore', type=int, help="Number of core to use. Default 1", default=1)
 def ametric(* args, ** kwargs) :
     ametricc.run(* args, ** kwargs)
 

@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 11:42:14
+# @Last Modified time: 2021-02-17 14:33:02
 
 import os, glob
 import pandas as pd
@@ -42,39 +42,38 @@ def ace_info(fsizes, nvalue, refsize=0) :
 
     return data
 
+def treat_file(fname, fdata, cpath, nvalue, refsize) :
+    fsizes = {record.id : len(record.seq) for record in fdata}
 
-def run(files, ref, refsize, nvalue=50, fullname=False, completepath=False, outfile=None, ** fkwargs) :
-    data = []
+    try : name = bname(fname.name)
+    except AttributeError : name = bname(str(fname))
 
+    if cpath and os.path.isabs(fname) == False :
+        fname = os.path.join(os.getcwd(), fname)
+
+    finfo = {
+        "fname"    : fname,
+        "basename" : name, 
+        "averageSize" : int(sum(fsizes.values()) / len(fsizes)),
+        "seqNumber": len(fsizes), 
+        "maxSize"  : max(fsizes.values()), 
+        "minSize"  : min(fsizes.values()),
+        "totalSize" : sum(fsizes.values())
+    }
+
+    return dict(** finfo, ** ace_info(fsizes, nvalue, refsize))
+
+def run(files, ref, refsize, nvalue=50, fullname=False, cpath=False, outfile=None, ** fkwargs) :
     if refsize == 0 and ref :
         refsize = sum(len(record.seq) 
             for _, fdata in iter_fdata((ref,))
             for record in fdata)
-    
-    for fname, fdata in iter_fdata(files, ** fkwargs) :
-        fsizes = {record.id : len(record.seq) for record in fdata}
-
-        try : name = bname(fname.name)
-        except AttributeError : name = bname(str(fname))
-
-        if completepath and os.path.isabs(fname) == False :
-            fname = os.path.join(os.getcwd(), fname)
-
-        finfo = {
-            "fname"    : fname,
-            "basename" : name, 
-            "averageSize" : int(sum(fsizes.values()) / len(fsizes)),
-            "seqNumber": len(fsizes), 
-            "maxSize"  : max(fsizes.values()), 
-            "minSize"  : min(fsizes.values())
-        }
-
-        finfo = dict(** finfo, ** ace_info(fsizes, nvalue, refsize))
-        data.append(finfo)
-
+        
+    pkwargs = {"cpath" : cpath, "nvalue" : nvalue, "refsize" : refsize}
+    data = iter_fdata(files, post_fun=treat_file, pkwargs=pkwargs, ** fkwargs)
     df = pd.DataFrame(data)
 
-    basecols = ["basename", "seqNumber", "minSize", "maxSize", "averageSize"]
+    basecols = ["basename", "seqNumber", "minSize", "maxSize", "averageSize", "totalSize"]
     if fullname : basecols[0] = "fname"
 
     cn = lambda x, i : x + str(i)
