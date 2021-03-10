@@ -129,8 +129,10 @@ rule picards_rmduplicates:
         metric = temp("data/rmdup_bam/{sample}.{ridx}.metrics.txt")
     log:
         "logs/picard/rmdup/{sample}.{ridx}.log"
+    resources:
+        mem_mb=12288
     shell:
-        "(picard MarkDuplicates INPUT={input} OUTPUT={output.bam} \
+        "(picard -Xmx10G MarkDuplicates INPUT={input} OUTPUT={output.bam} \
         REMOVE_DUPLICATES=true METRICS_FILE={output.metric}) 2> {log}" 
 
 rule merge_bam:
@@ -197,11 +199,13 @@ rule gatk_call:
         rdic = lambda wildcards: os.path.splitext(config[wildcards.sample]["reference"])[0] + ".dict"
     output:
         "data/vcf/{sample}.{ploidy}.vcf"
+    resources:
+        mem_mb=8500
     log:
         "logs/gatk/{sample}.{ploidy}.log"
     shell:
         "(gatk HaplotypeCaller -R {input.reference} -I {input.bamfile} \
-        -O {output} -ploidy {wildcards.ploidy}) 2> {log}" 
+        -O {output} -ploidy {wildcards.ploidy} --java-options '-Xmx8G') 2> {log}"
 
 rule rtg_vcfstats:
     input:
