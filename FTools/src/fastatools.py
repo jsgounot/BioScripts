@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-02-17 14:39:51
+# @Last Modified time: 2021-03-10 14:23:58
 
 import os, sys
 
@@ -81,6 +81,7 @@ def generate(* args, ** kwargs) :
 @click.option('--sort', type=str, help="Column name used to sort results", default="ID")
 @click.option('--head', type=int, help="N first rows to display", default=0)
 @click.option('--names', type=str, multiple=True, help="Extract only provided header names")
+@click.option('--write', help="Write resulting table in file_name.fstats.tsv", is_flag=True)
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
 @click.option('--basecount', help="Return basecount instead", is_flag=True)
 @click.option('--nsep', help="Add separator to numbers", is_flag=True)

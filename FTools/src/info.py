@@ -5,7 +5,7 @@ from collections import Counter
 import pandas as pd
 import utils
 
-def run_basecount(files, sort="ID", head=0, nsep=False, ** fkwargs) :
+def run_basecount(files, sort="ID", head=0, nsep=False, write=False, ** fkwargs) :
     for fname, fdata in utils.iter_fdata(files, ** fkwargs) :
         fdata = ({"ID" : record.id, ** Counter(record.seq)} for record in fdata)
         df = pd.DataFrame(fdata).fillna(0)
@@ -25,11 +25,18 @@ def run_basecount(files, sort="ID", head=0, nsep=False, ** fkwargs) :
         if head : df = df.head(head)
         df = df.append(s, ignore_index=True)
 
+        if write :
+            outfile = fname + ".fstats.basecount.tsv"
+            if os.path.isfile(outfile) :
+                print ("Warning : File already exists, ignore : %s" %(outfile))
+            else :
+                df.to_csv(outfile, sep="\t")
+        
         print (fname)
         with pd.option_context('display.max_rows', None, 'display.max_columns', None):  
             print (df)
 
-def run_default(files, sort="ID", head=0, nsep=False, ** fkwargs) :
+def run_default(files, sort="ID", head=0, nsep=False, write=False, ** fkwargs) :
     for fname, fdata in utils.iter_fdata(files, ** fkwargs) :
         fdata = ({"ID" : record.id, ** seqinfo(record.seq)} for record in fdata)
         df = pd.DataFrame(fdata)
@@ -51,6 +58,13 @@ def run_default(files, sort="ID", head=0, nsep=False, ** fkwargs) :
             if nsep : 
                 df["Length"] = df["Length"].apply(lambda x : '{:,}'.format(x))
 
+            if write :
+                outfile = fname + ".fstats.info.tsv"
+                if os.path.isfile(outfile) :
+                    print ("Warning : File already exists, ignore : %s" %(outfile))
+                else :
+                    df.to_csv(outfile, sep="\t")
+            
             print (fname)
             with pd.option_context('display.max_rows', None, 'display.max_columns', None):  
                 print (df)
@@ -61,6 +75,6 @@ def seqinfo(seq) :
     gc, n, length = seq.count("G") + seq.count("C"), seq.count("N"), len(seq)
     return {"Length" : length, "#GC" : gc, "#N" : n}
  
-def run(files, sort="ID", head=0, basecount=False, nsep=False, ** fkwargs) :
+def run(files, sort="ID", head=0, basecount=False, nsep=False, write=False, ** fkwargs) :
     fun = run_basecount if basecount else run_default
-    fun(files, sort, head, nsep, ** fkwargs)
+    fun(files, sort, head, nsep, write, ** fkwargs)
