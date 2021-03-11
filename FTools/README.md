@@ -3,7 +3,7 @@
 Collection of fasta tools :
 
 * `ametric` : Display assembly metric
-* `extact` : Extract fasta sequence
+* `extract` : Extract fasta sequence
 * `generate` : Generate random fasta sequences
 * `info` : Display sequences informations
 * `compare` : Compare the exact matches between two fasta files
