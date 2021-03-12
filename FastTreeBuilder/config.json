@@ -1,0 +1,7 @@
+{
+	"mash" : {
+		"path" : "mash",
+		"sketch_size" : 1000,
+		"kmer_size" : 15
+	}
+}

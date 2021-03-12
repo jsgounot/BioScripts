@@ -1,0 +1,75 @@
+# @Author: jsgounot
+# @Date:   2021-03-11 17:54:30
+# Inspired by https://github.com/afelten-Anses/QuickPhylo
+
+import glob, os
+from multiprocessing import cpu_count
+
+configfile: "config.json"
+
+samples = [os.path.basename(fname) for fname in glob.glob("fasta/*")]
+
+# -------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        expand("tree/{sample}.tree_nj.newick", sample=samples),
+        expand("tree/{sample}.tree_upgma.newick", sample=samples)
+
+rule mash_seqlist:
+    input: 
+        "fasta/{sample}/"
+    output:
+        "mash/{sample}.seqlist.txt"
+    shell:
+        "ls -d $PWD/fasta/{wildcards.sample}/* > {output}" 
+
+rule mash_sketch:
+    input:
+        "mash/{sample}.seqlist.txt"
+    output:
+        "mash/{sample}.sketch.msh"
+    threads:
+        4
+    params:
+        mash = config["mash"]["path"],
+        sketch_size = config["mash"]["sketch_size"],
+        kmer_size = config["mash"]["kmer_size"]
+    shell:
+        "{params.mash} sketch -l {input} -p {threads} -k {params.kmer_size} -s {params.sketch_size} -o {output}"
+
+rule mash_dist:
+    input:
+        "mash/{sample}.sketch.msh"
+    output:
+        temp("mash/{sample}.mash_dist.txt.gz")
+    threads:
+        4
+    params:
+        mash = config["mash"]["path"]
+    shell:
+        "{params.mash} dist -p {threads} {input} {input} | gzip > {output}"
+
+rule make_matrix:
+    input:
+        "mash/{sample}.mash_dist.txt.gz"
+    output:
+        "mash/{sample}.mash_dist.matrix.csv.gz"
+    script:
+        "scripts/mash_matrix.py"
+
+rule tree_nj:
+    input:
+        "mash/{sample}.mash_dist.matrix.csv.gz"
+    output:
+        "tree/{sample}.tree_nj.newick"
+    script:
+        "scripts/dendro_nj.py"
+
+rule tree_upgma:
+    input:
+        "mash/{sample}.mash_dist.matrix.csv.gz"
+    output:
+        "tree/{sample}.tree_upgma.newick"
+    script:
+        "scripts/dendro_upgma.py"
