@@ -3,7 +3,6 @@
 # Inspired by https://github.com/afelten-Anses/QuickPhylo
 
 import glob, os
-from multiprocessing import cpu_count
 
 configfile: "config.json"
 
