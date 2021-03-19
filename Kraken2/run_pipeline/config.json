@@ -1,0 +1,22 @@
+{ 
+	"sample_name" : {
+		
+		"db1" : {
+			"reads" : ["path/to/read_1.fastq.gz",
+					   "path/to/read_2.fastq.gz"],
+			"database" : "path/to/database_1"
+		},
+
+		"db2" : {
+			"reads" : ["path/to/read_1.fastq.gz",
+					   "path/to/read_2.fastq.gz"],
+			"database" : "path/to/database_2",
+			"memory" : 1200,
+			"threads" : 8,
+			"kraken_adding" : ["--minimum-hit-groups 2"],
+			"bracken_adding" : ["-t 0"],
+			"bracken_ranks" : {"species" : "S"},
+			"paired" : "False"
+		}
+	}
+}
