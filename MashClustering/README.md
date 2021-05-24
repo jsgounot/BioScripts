@@ -1,6 +1,6 @@
 # Mash Clustering
 
-MAGs derepliction based on [MASH](https://github.com/marbl/Mash) distances.
+MAGs derepliction based on [Mash](https://github.com/marbl/Mash) distances.
 
 1. Sketch sequences
 2. Calculate mash distances 
@@ -13,6 +13,8 @@ MAGs derepliction based on [MASH](https://github.com/marbl/Mash) distances.
 mamba create -n mash_clustering -c bioconda -c anaconda -c conda-forge mash networkx scikit-learn pandas snakemake
 ```
 
+You will need to replace the files paths directly inside the SnakeFile.
+
 # See also
 
-* [Galah](https://github.com/wwood/galah) : Another dereplication method using ANI distances and define central nodes based on checkM results.
+* [Galah](https://github.com/wwood/galah) : Another dereplication method using ANI distances and define central nodes based on checkM results. The Mash pipeline remains must faster.
