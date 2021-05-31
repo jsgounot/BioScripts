@@ -15,9 +15,7 @@ THREADS     = 40
 
 rule all:
     input:
-        expand("results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.matrix.tsv", zip,
-                ssize=SKETCH_SIZE, skmer=SKETCH_KMER, mdist=MIN_DIST),
-        expand("results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.clusters.tsv", zip,
+        expand("results/softlinks/{ssize}.{skmer}.{mdist}/checkpoint.tmp", zip,
                 ssize=SKETCH_SIZE, skmer=SKETCH_KMER, mdist=MIN_DIST)
 
 rule mash_list :
@@ -60,3 +58,11 @@ rule dist_clustering :
         clusters = "results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.clusters.tsv"
     script :
         "scripts/dist_clustering.py"
+
+rule make_softlinks :
+    input :
+        "results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.clusters.tsv"
+    output :
+        "results/softlinks/{ssize}.{skmer}.{mdist}/checkpoint.tmp"
+    script :
+        "scripts/make_softlinks.py"        

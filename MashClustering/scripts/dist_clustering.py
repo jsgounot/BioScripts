@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-05-23 16:52:04
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-05-23 17:32:54
+# @Last Modified time: 2021-05-31 15:45:51
 
 import glob, os
 
@@ -23,8 +23,9 @@ names = ["reference-ID", "query-ID", "distance", "p-value", "shared-hashes"]
 
 print ("read ", fname)
 df = pd.read_csv(fname, sep="\t", names=names, compression="gzip")
-df["reference-ID"] = df["reference-ID"].apply(lambda path : os.path.basename(path))
-df["query-ID"] = df["query-ID"].apply(lambda path : os.path.basename(path))
+
+#df["reference-ID"] = df["reference-ID"].apply(lambda path : os.path.basename(path))
+#df["query-ID"] = df["query-ID"].apply(lambda path : os.path.basename(path))
 
 print ("make matrix ...")
 matrix = pd.pivot_table(df, index="reference-ID", columns="query-ID", values="distance", fill_value=1)
