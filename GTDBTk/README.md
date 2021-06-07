@@ -1,4 +1,4 @@
-# Kraken2 DBBUILDER
+# GTDBTk analyses
 
 A collections of scripts used to work with [GTDBTk](https://github.com/Ecogenomics/GTDBTk) results.
 
