@@ -1,0 +1,241 @@
+configfile: "config.json"
+
+SAMPLES = list(config.keys())
+
+# Check inputs
+for sample, sreads in config.items() :
+    for opt, read in sreads.items() :
+        if not os.path.isfile(read) :
+            raise Exception("File not found : %s" %(read))
+
+rule all:
+    input:
+        "data/table/bins_info.tsv",
+        "data/table/mags_info.tsv"
+
+rule megahit_paired:
+    # In this version I remove intermediate files which took a lot of space
+    input:
+        r1 = lambda wildcards : config[wildcards.sample]["r1"],
+        r2 = lambda wildcards : config[wildcards.sample]["r2"]
+    output:
+        "megahit/{sample}/final.contigs.fa"
+    params:
+        outdir = "megahit/{sample}",
+        interm = "megahit/{sample}/intermediate_contigs"
+    conda:
+        "pipe/env/megahit.yaml"
+    threads:
+        8
+    log:
+        "logs/{sample}.megahit_paired.log"
+    shell:
+        "rm -rf {params.outdir} && megahit -1 {input.r1} -2 {input.r2} -o {params.outdir} -t {threads} && rm -rf {params.interm} 2> {log}"
+
+rule link_assembly:
+    input:
+        "megahit/{sample}/final.contigs.fa"
+    output:
+        "data/assemblies/{sample}.raw_assemblies.fa"
+    shell:
+        "ln -s $(pwd)/{input} {output}"
+
+rule metabat2_softlink:
+    input:
+        "data/assemblies/{sample}.raw_assemblies.fa"
+    output :
+        "metabat2/{sample}/{sample}.raw_assemblies.fa"
+    shell:
+        "ln -s $(pwd)/{input} {output}"
+
+rule metabat2_bwa_index:
+    input:
+        "metabat2/{sample}/{sample}.raw_assemblies.fa"
+    output:
+        multiext("metabat2/{sample}/{sample}.raw_assemblies.fa", ".amb", ".ann", ".bwt", ".pac", ".sa")
+    conda:
+        "pipe/env/metabat2.yaml"
+    log:
+        "logs/{sample}.metabat2.log"
+    shell:
+        "bwa index {input} 2> {log}"
+
+rule metabat2_bwa_mapping:
+    input:
+        fasta = "metabat2/{sample}/{sample}.raw_assemblies.fa",
+        index = "metabat2/{sample}/{sample}.raw_assemblies.fa.amb",
+        r1 = lambda wildcards : config[wildcards.sample]["r1"],
+        r2 = lambda wildcards : config[wildcards.sample]["r2"]
+    output:
+        temp("metabat2/{sample}/{sample}.bam")
+    conda:
+        "pipe/env/metabat2.yaml"
+    threads:
+        8
+    log:
+        "logs/{sample}.metabat2.log"
+    shell:
+        "(bwa mem -t {threads} {input.fasta} {input.r1} {input.r2} | samtools view -Sub - | samtools sort - > {output}) 2>> {log}"
+
+rule metabat2_samtools_index:
+    input:
+        "metabat2/{sample}/{sample}.bam"
+    output:
+        "metabat2/{sample}/{sample}.bam.bai"
+    conda:
+        "pipe/env/metabat2.yaml"
+    log:
+        "logs/{sample}.metabat2.log"
+    shell:
+        "samtools index {input} 2>> {log}"
+
+rule metabat2_contig_depth:
+    input:
+        bam = "metabat2/{sample}/{sample}.bam",
+        bai = "metabat2/{sample}/{sample}.bam.bai"
+    output:
+        "metabat2/{sample}/{sample}.jgi_depth"
+    conda:
+        "pipe/env/metabat2.yaml"
+    log:
+        "logs/{sample}.metabat2.log"
+    shell:
+        "jgi_summarize_bam_contig_depths --outputDepth {output} {input.bam} 2>> {log}"
+        
+rule metabat2_run:
+    input:
+        wa = "metabat2/{sample}/{sample}.raw_assemblies.fa",
+        de = "metabat2/{sample}/{sample}.jgi_depth"
+    output:
+        "metabat2/{sample}/bins/check.empty" # temp
+    params:
+        outname = "metabat2/{sample}/bins/{sample}.bin"
+    conda:
+        "pipe/env/metabat2.yaml"
+    log:
+        "logs/{sample}.metabat2_mapping.log"
+    shell:
+        "metabat2 --unbinned -i {input.wa} -a {input.de} -o {params.outname} && touch {output} 2>> {log}"
+
+rule link_bins:
+    input:
+        "metabat2/{sample}/bins/check.empty"
+    output:
+        "data/bins/{sample}/check.empty" # temp
+    params:
+        fasta  = "metabat2/{sample}/bins/{sample}.bin.[0-9].fa",
+        outdir = "data/bins/{sample}/"
+    shell:
+        "ln -sf $(pwd)/{params.fasta} {params.outdir} && touch {output}"
+
+rule checkm_lineage:
+    input :
+        "data/bins/{sample}/check.empty"
+    output:
+        "checkm/{sample}/lineage.ms"
+    params:
+        bindir = "data/bins/{sample}",
+        outdir = "checkm/{sample}"
+    threads:
+        8
+    resources:
+         mem_mb = 35000 #35G for pplacer
+    log:
+        "logs/{sample}.checkm.log"
+    conda:
+        "pipe/env/checkm.yaml"
+    shell: 
+        "checkm lineage_wf -t {threads} -x fa {params.bindir} {params.outdir} &> {log}"
+
+rule checkm_quality:
+    input :
+        "checkm/{sample}/lineage.ms"
+    output:
+        "checkm/{sample}/eval.tsv"
+    params:
+        bindir = "data/bins/{sample}",
+        outdir = "checkm/{sample}"
+    log:
+        "logs/{sample}.checkm.log"
+    conda:
+        "pipe/env/checkm.yaml"
+    shell: 
+        "checkm qa -o 2 {input} {params.outdir} > {output} 2>> {log}"
+
+rule checkm_parse:
+    input:
+        "checkm/{sample}/eval.tsv"
+    output :
+        "checkm/{sample}/results.tsv"
+    script:
+        "pipe/scripts/parse_checkm.py"
+
+rule barrnap:
+    input :
+        "data/bins/{sample}/check.empty"
+    output:
+        "barrnap/{sample}/check.empty"
+    params:
+        bins = "data/bins/{sample}/*.fa"
+    conda:
+        "pipe/env/rna_tools.yaml"
+    log:
+        "logs/{sample}.barrnap.log"
+    shell:
+        "for fname in {params.bins}; do barrnap $fname > barrnap/{wildcards.sample}/${{fname##*/}}.barrnap.txt ; done && touch {output} 2> {log}"
+
+rule barrnap_parse:
+    input:
+        "barrnap/{sample}/check.empty"
+    output :
+        "barrnap/{sample}/results.tsv"
+    script:
+        "pipe/scripts/parse_barrnap.py"
+    
+rule trnaScanSe_bact:
+    input :
+        "data/bins/{sample}/check.empty"
+    output:
+        "trnaScanSe/{sample}/check.bact.empty"
+    params:
+        bins = "data/bins/{sample}/*.fa"
+    log:
+        "logs/{sample}.trnascan.bact.log"
+    conda:
+        "pipe/env/rna_tools.yaml"
+    shell:
+        "for fname in {params.bins}; do tRNAscan-SE -B -Q -o trnaScanSe/{wildcards.sample}/${{fname##*/}}.trnascanse.bact.txt $fname; done && touch {output} 2> {log}"
+
+rule trnaScanSe_arch:
+    input :
+        "data/bins/{sample}/check.empty"
+    output:
+        "trnaScanSe/{sample}/check.arch.empty"
+    params:
+        bins = "data/bins/{sample}/*.fa"
+    log:
+        "logs/{sample}.trnascan.arch.log"
+    conda:
+        "pipe/env/rna_tools.yaml"
+    shell:
+        "for fname in {params.bins}; do tRNAscan-SE -A -Q -o trnaScanSe/{wildcards.sample}/${{fname##*/}}.trnascanse.arch.txt $fname; done && touch {output} 2> {log}"
+
+rule trnaScanSe_parse:
+    input:
+        "trnaScanSe/{sample}/check.bact.empty",
+        "trnaScanSe/{sample}/check.arch.empty"
+    output :
+        "trnaScanSe/{sample}/results.tsv"
+    script:
+        "pipe/scripts/parse_trnascan.py"
+
+rule fuse_info:
+    input:
+        checkm   = expand("checkm/{sample}/results.tsv", sample=SAMPLES),
+        barrnap  = expand("barrnap/{sample}/results.tsv", sample=SAMPLES),
+        trnascan = expand("trnaScanSe/{sample}/results.tsv", sample=SAMPLES)
+    output:
+        bins = "data/table/bins_info.tsv",
+        mags = "data/table/mags_info.tsv"
+    script:
+        "pipe/scripts/fuse_bininfo.py"

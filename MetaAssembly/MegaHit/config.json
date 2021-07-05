@@ -1,0 +1,9 @@
+{
+	"sample" : {
+		"r1" : "path/read.fastq",
+		"r2" : "path/read.fastq"
+	},
+	"sample" : {
+		"r" : "path/read.fastq"
+	}
+}
