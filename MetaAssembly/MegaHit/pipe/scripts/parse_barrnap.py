@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-07-02 15:36:36
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-07-02 16:49:15
+# @Last Modified time: 2021-08-02 12:52:18
 
 import os, glob
 import pandas as pd
@@ -10,6 +10,10 @@ from collections import defaultdict
 
 bname = os.path.basename
 dname = os.path.dirname
+
+def touch(fname):
+    with open(fname, "w") as f:
+        pass
 
 checkfile = snakemake.input[0]
 
@@ -32,9 +36,13 @@ for fname in sorted(fnames) :
             if "partial" in values["product"] : continue
             barrdata[mID][values["Name"]] += 1
 
-found = sorted(set.union(* [set(keys) for keys in barrdata.values()]) | {"5S_rRNA", "16S_rRNA", "23S_rRNA"})
-df = pd.DataFrame([{"ID" : mID, ** {key : values[key] for key in found}}
-    for mID, values in barrdata.items()])
-
 outfile = snakemake.output[0]
-df.to_csv(outfile, sep="\t")
+
+if fnames:
+    found = sorted(set.union(* [set(keys) for keys in barrdata.values()]) | {"5S_rRNA", "16S_rRNA", "23S_rRNA"})
+    df = pd.DataFrame([{"ID" : mID, ** {key : values[key] for key in found}}
+        for mID, values in barrdata.items()])
+    df.to_csv(outfile, sep="\t")
+
+else:
+    touch(outfile)

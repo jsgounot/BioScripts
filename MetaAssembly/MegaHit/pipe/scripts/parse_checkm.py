@@ -2,13 +2,17 @@
 # @Author: jsgounot
 # @Date:   2021-07-02 15:50:09
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-07-02 16:13:25
+# @Last Modified time: 2021-08-02 12:53:00
 
 import os, glob, re
 import pandas as pd
 
 bname = os.path.basename
 dname = os.path.dirname
+
+def touch(fname):
+    with open(fname, "w") as f:
+        pass
 
 def load_eval(evalFile) :
     data = []
@@ -52,10 +56,12 @@ def load_eval(evalFile) :
 
     return df
 
-fnames = snakemake.input[0]
-fnames = glob.glob(fnames)
-
-df = pd.concat([load_eval(fname) for fname in fnames])
-
+fname = snakemake.input[0]
 outfile = snakemake.output[0]
-df.to_csv(outfile, sep="\t")
+
+if os.path.basename(fname) == "check.empty":
+    touch(outfile)
+
+else:
+    df = load_eval(fname)
+    df.to_csv(outfile, sep="\t")

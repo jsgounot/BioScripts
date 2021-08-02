@@ -2,13 +2,17 @@
 # @Author: jsgounot
 # @Date:   2021-07-02 15:36:26
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-07-05 16:59:48
+# @Last Modified time: 2021-08-02 12:51:42
 
 import os, glob
 import pandas as pd
 
 bname = os.path.basename
 dname = os.path.dirname
+
+def touch(fname):
+    with open(fname, "w") as f:
+        pass
 
 checkfile = snakemake.input[0]
 
@@ -53,8 +57,12 @@ for fname in sorted(fnames) :
         "tRNAUniqueStrict" : nunique_strict, 
         "tRNATCount" : totalu}
         )
-    
-df = pd.DataFrame(trnadata)
-outfile = snakemake.output[0]
-df.to_csv(outfile, sep="\t")
 
+outfile = snakemake.output[0]
+
+if fnames:
+    df = pd.DataFrame(trnadata)
+    df.to_csv(outfile, sep="\t")
+
+else:
+    touch(outfile)

@@ -1,3 +1,5 @@
+import os, glob
+
 configfile: "config.json"
 
 SAMPLES = list(config.keys())
@@ -117,16 +119,53 @@ rule metabat2_run:
     shell:
         "metabat2 --unbinned -i {input.wa} -a {input.de} -o {params.outname} && touch {output} 2>> {log}"
 
-rule link_bins:
+checkpoint link_bins:
     input:
         "metabat2/{sample}/bins/check.empty"
     output:
         "data/bins/{sample}/check.empty" # temp
     params:
-        fasta  = "metabat2/{sample}/bins/{sample}.bin.[0-9].fa",
+        fasta  = "metabat2/{sample}/bins/{sample}.bin.[0-9]*.fa",
         outdir = "data/bins/{sample}/"
     shell:
-        "ln -sf $(pwd)/{params.fasta} {params.outdir} && touch {output}"
+        # "ln -sf $(pwd)/{params.fasta} {params.outdir} && touch {output}"
+        'for f in $(pwd)/{params.fasta}; do [ -e "$f" ] && ln -s $f {params.outdir} || break; done && touch {output}'
+
+# ------------------------------------------------------------------------
+# Aggregation in case we don't have bins out of metabins 
+# What we're doing here is giving to snakemake the metabat checkfile output instead of the softwares
+# outputs when no bins have been generated. I modified the software parser to deal with this input.
+
+def agg_checkm(sample):
+    # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
+    checkfile = checkpoints.link_bins.get(sample=sample).output[0]
+    binfiles = any(glob.glob(os.path.join(os.path.dirname(checkfile), "*.fa")))
+    if binfiles: return "checkm/{sample}/eval.tsv"
+    return checkfile
+
+def agg_barrnap(sample):
+    # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
+    checkfile = checkpoints.link_bins.get(sample=sample).output[0]
+    binfiles = any(glob.glob(os.path.join(os.path.dirname(checkfile), "*.fa")))
+    if binfiles: return "barrnap/{sample}/check.empty"
+    return checkfile
+
+def agg_trnascan_arch(sample):
+    # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
+    checkfile = checkpoints.link_bins.get(sample=sample).output[0]
+    binfiles = any(glob.glob(os.path.join(os.path.dirname(checkfile), "*.fa")))
+    if binfiles: return "trnaScanSe/{sample}/check.arch.empty"
+    return checkfile
+
+def agg_trnascan_bact(sample):
+    # https://snakemake.readthedocs.io/en/stable/snakefiles/rules.html#data-dependent-conditional-execution
+    checkfile = checkpoints.link_bins.get(sample=sample).output[0]
+    binfiles = any(glob.glob(os.path.join(os.path.dirname(checkfile), "*.fa")))
+    if binfiles: return "trnaScanSe/{sample}/check.bact.empty"
+    return checkfile
+
+# ------------------------------------------------------------------------------------
+# Bins results analysis
 
 rule checkm_lineage:
     input :
@@ -164,7 +203,8 @@ rule checkm_quality:
 
 rule checkm_parse:
     input:
-        "checkm/{sample}/eval.tsv"
+        #"checkm/{sample}/eval.tsv"
+        agg_checkm
     output :
         "checkm/{sample}/results.tsv"
     script:
@@ -186,7 +226,8 @@ rule barrnap:
 
 rule barrnap_parse:
     input:
-        "barrnap/{sample}/check.empty"
+        #"barrnap/{sample}/check.empty"
+        agg_barrnap
     output :
         "barrnap/{sample}/results.tsv"
     script:
@@ -222,12 +263,17 @@ rule trnaScanSe_arch:
 
 rule trnaScanSe_parse:
     input:
-        "trnaScanSe/{sample}/check.bact.empty",
-        "trnaScanSe/{sample}/check.arch.empty"
+        #"trnaScanSe/{sample}/check.bact.empty",
+        #"trnaScanSe/{sample}/check.arch.empty"
+        agg_trnascan_arch,
+        agg_trnascan_bact
     output :
         "trnaScanSe/{sample}/results.tsv"
     script:
         "pipe/scripts/parse_trnascan.py"
+
+# ------------------------------------------------------------------------------------
+# Final outputs
 
 rule fuse_info:
     input:

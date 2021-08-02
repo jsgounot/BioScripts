@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-07-02 16:51:41
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-07-05 17:22:49
+# @Last Modified time: 2021-08-02 13:47:45
 
 import os
 import pandas as pd
@@ -13,14 +13,17 @@ checkm   = snakemake.input.checkm
 barrnap  = snakemake.input.barrnap
 trnascan = snakemake.input.trnascan
 
+def isfileempty(fname):
+	return os.stat(fname).st_size == 0
+
 def load_df(fname) :
 	df = pd.read_csv(fname, sep="\t", index_col=0)
 	df["sample"] = os.path.basename(os.path.dirname(fname))
 	return df
 
-checkm   = pd.concat((load_df(fname) for fname in checkm))
-barrnap  = pd.concat((load_df(fname) for fname in barrnap))
-trnascan = pd.concat((load_df(fname) for fname in trnascan))
+checkm   = pd.concat((load_df(fname) for fname in checkm if not isfileempty(fname)))
+barrnap  = pd.concat((load_df(fname) for fname in barrnap if not isfileempty(fname)))
+trnascan = pd.concat((load_df(fname) for fname in trnascan if not isfileempty(fname)))
 
 barrnap["ID"] = barrnap["ID"].apply(rmext)
 
