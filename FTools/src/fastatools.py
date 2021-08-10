@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-03-10 14:23:58
+# @Last Modified time: 2021-08-10 12:14:12
 
 import os, sys
 
@@ -20,8 +20,8 @@ def cli():
 
 @cli.command(help="Display assembly metrics")
 @click.argument("files", nargs=-1, type=str)
-@click.option('--ref', type=str, help="Reference fasta path", default="")
-@click.option('--refsize', type=str, help="Override --ref", default=0)
+@click.option('--ref', type=str, help="Reference fasta path (LG stats)", default="")
+@click.option('--refsize', type=int, help="Override --ref", default=0)
 @click.option('--minsize', type=int, help="Sequence minimum size to consider", default=0)
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--nvalue', type=int, help="N value to consider (N50, N90). Default 50", default=50)
