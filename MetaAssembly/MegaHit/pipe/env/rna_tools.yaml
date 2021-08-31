@@ -1,0 +1,22 @@
+name: rna_tools
+channels:
+  - biobakery
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=1_gnu
+  - barrnap=0.9=2
+  - bedtools=2.30.0=h7d7f7ad_1
+  - bzip2=1.0.8=h7f98852_4
+  - hmmer=3.3.2=h1b792b2_1
+  - infernal=1.1.4=h779adbc_0
+  - libgcc-ng=9.3.0=h2828fa1_19
+  - libgomp=9.3.0=h2828fa1_19
+  - libstdcxx-ng=9.3.0=h6de172a_19
+  - perl=5.26.2=h36c2ea0_1008
+  - trnascan-se=2.0.7=pl5262h779adbc_1
+  - xz=5.2.5=h516909a_1
+  - zlib=1.2.11=h516909a_1010
+prefix: /home/ubuntu/anaconda3/envs/rna_tools

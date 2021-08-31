@@ -1,0 +1,68 @@
+import glob, os
+
+fnames  = "path/mags.fa"
+fnames  = glob.glob(fnames)
+
+if not fnames :
+    raise Exception("No input files found")
+
+SKETCH_SIZE = [10000]
+SKETCH_KMER = [21]
+MIN_DIST    = [5]
+THREADS     = 40
+
+# -------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        expand("results/softlinks/{ssize}.{skmer}.{mdist}/checkpoint.tmp", zip,
+                ssize=SKETCH_SIZE, skmer=SKETCH_KMER, mdist=MIN_DIST)
+
+rule mash_list :
+    params :
+        fnames = fnames
+    output :
+        "results/mash/fnames.txt"
+    script :
+        "scripts/make_mash_list.py"
+
+rule mash_sketch :
+    input :
+        "results/mash/fnames.txt"
+    threads :
+        THREADS
+    output :
+        "results/mash/sequences.dist.{ssize}.{skmer}.msh"
+    shell :
+        "mash sketch -l {input} -o {output} -p {threads} -s {wildcards.ssize} -k {wildcards.skmer}"
+
+rule mash_dist :
+    input :
+        "results/mash/sequences.dist.{ssize}.{skmer}.msh"
+    params :
+        dist = lambda wc : int(wc.mdist) / 100
+    threads :
+        THREADS
+    output :
+        "results/mash/sequences.dist.{ssize}.{skmer}.{mdist}.tsv.gz"
+    shell :
+        "mash dist -d {params.dist} -p {threads} {input} {input} | gzip > {output}"
+
+rule dist_clustering :
+    input :
+        dist = "results/mash/sequences.dist.{ssize}.{skmer}.{mdist}.tsv.gz",
+    params :
+        threshold = lambda wc : int(wc.mdist) / 100
+    output :
+        matrix = "results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.matrix.tsv",
+        clusters = "results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.clusters.tsv"
+    script :
+        "scripts/dist_clustering.py"
+
+rule make_softlinks :
+    input :
+        "results/clustering/sequences.dist.{ssize}.{skmer}.{mdist}.clustering.clusters.tsv"
+    output :
+        "results/softlinks/{ssize}.{skmer}.{mdist}/checkpoint.tmp"
+    script :
+        "scripts/make_softlinks.py"        

@@ -1,0 +1,83 @@
+import glob, os
+import json
+
+class IdManager:
+
+    def __init__(self, fname) :
+        self.fname = fname
+        self.data = self.read_fname()
+        self.value = max(self.data.values()) + 1 if self.data else 0
+
+    def read_fname(self) :
+        if os.path.isfile(self.fname) :
+            with open(self.fname) as f :
+                return json.load(f)
+        return {}
+
+    def get_identifier(self, name) :
+        if name in self.data :
+            return str(self.data[name])
+
+        self.data[name] = self.value
+        self.value = self.value + 1
+        return str(self.value - 1)
+
+    def save(self) :
+        with open(self.fname, 'w') as f:
+            json.dump(self.data, f)
+
+# ----------------------------------------------------------------------------------------------------
+
+MAX_DIST = 0.3
+
+QUERIES = "path/to/your/sketched_queries/*.msh"
+TARGETS = "path/to/your/sketched_targets/*.msh"
+
+queries = glob.glob(QUERIES)
+targets = glob.glob(TARGETS)
+
+os.makedirs("workingdir", exist_ok=True)
+
+qids = IdManager("workingdir/queries_ids.json")
+tids = IdManager("workingdir/targets_ids.json")
+
+queries = {qids.get_identifier(query) : query for query in queries}
+targets = {tids.get_identifier(target) : target for target in targets}
+
+qids.save()
+tids.save()
+
+# ----------------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        "mash_results.tsv"
+
+rule run_mash:
+    input:
+        query  = lambda wc : queries[wc.qid],
+        target = lambda wc : targets[wc.tid]
+    output: 
+        "workingdir/{qid}_{tid}.dist.tsv.gz"
+    threads:
+        4
+    params:
+        maxd = MAX_DIST
+    shell:
+        "mash dist -p {threads} -d {params.maxd} {input.query} {input.target} | gzip > {output}"
+
+rule extract_best:
+    input:
+        "workingdir/{qid}_{tid}.dist.tsv.gz"
+    output:
+        temp("workingdir/{qid}_{tid}.dist.best.tsv")
+    script:
+        "scripts/parse.extract.best.py"
+
+rule merge_extract:
+    input:
+        expand("workingdir/{qid}_{tid}.dist.best.tsv", qid=queries, tid=targets)
+    output:
+        "mash_results.tsv"
+    script:
+        "scripts/merge.extract.best.py"

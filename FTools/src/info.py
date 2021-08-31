@@ -7,7 +7,7 @@ import utils
 
 def run_basecount(files, sort="ID", head=0, nsep=False, write=False, ** fkwargs) :
     for fname, fdata in utils.iter_fdata(files, ** fkwargs) :
-        fdata = ({"ID" : record.id, ** Counter(record.seq)} for record in fdata)
+        fdata = ({"ID" : record.id, ** Counter(record.seq.upper())} for record in fdata)
         df = pd.DataFrame(fdata).fillna(0)
 
         for column in df.columns :

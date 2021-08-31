@@ -1,0 +1,34 @@
+import os, glob
+
+fnames = "data/*.fastq.gz"
+fnames = sorted(glob.glob(fnames))
+assert fnames
+
+# Number of reads you want, a prc can be used to
+# See: https://github.com/lh3/seqtk or https://www.biostars.org/p/6544/
+rcount = [1000000]
+
+def make_basename(fname):
+    bname = os.path.basename(fname)
+    if bname.endswith(".gz"):
+        bname = bname[:-3]
+    if bname.endswith(".fastq"):
+        bname = bname[:-6]
+    return bname
+
+basenames = {make_basename(fname): fname for fname in fnames}
+assert len(basenames) == len(fnames)
+
+rule all:
+    input:
+        expand("output/{basename}.sampled.{rcount}.fastq.gz", basename=basenames, rcount=rcount)
+
+rule seqtk:
+    input:
+        lambda wc: basenames[wc.basename]
+    output:
+        "output/{basename}.sampled.{rcount}.fastq.gz"
+    conda:
+        "seqtk.conda.env.yaml"
+    shell:
+        "seqtk sample -s100 {input} {rcount} | gzip > {output}"
