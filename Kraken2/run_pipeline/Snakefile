@@ -3,7 +3,7 @@ import glob, os
 configfile: "config.json"
 
 DEFAULT_THREADS = 4
-DEFAULT_MEMORY_MB = 1000
+DEFAULT_MEMORY_MB = 4000
 DEFAULT_BRACKEN_RANKS = {"species" : "S", "genus" : "G"}
 
 # -------------------------------------------------------------------------------------------
