@@ -1,11 +1,10 @@
 # @Author: jsgounot
 # @Date:   2020-12-09 11:18:39
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2020-12-09 11:31:55
+# @Last Modified time: 2021-03-10 14:52:29
 
-input=$(realpath $1)
-mapped=$(samtools view -c -F 4 $input)
-unmapped=$(samtools view -c -f 4 $input)
+mapped=$(samtools view -c -F 4 $1)
+unmapped=$(samtools view -c -f 4 $1)
 sumvalue=$(($mapped+$unmapped))
 prc=$(bc <<< "scale=4;$mapped/$sumvalue")
 echo "mapped:$mapped"

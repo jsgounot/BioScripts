@@ -1,0 +1,11 @@
+{
+	"sampleA" : {
+		"reads" : {
+			"r1": "...",
+			"r2": "...",
+			"references": {
+			 	"refname1": "..."
+			 }
+		}
+	}
+}

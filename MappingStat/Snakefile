@@ -1,49 +1,95 @@
-import glob
+from collections import defaultdict
 
-samples = glob.glob('samfiles/*.sam')
-samples = {os.path.basename(fname)[:-4] for fname in samples}
+configfile: "config.json"
+
+SAMPLES, RNAMES = [], []
+
+for sample, sinfo in config.items() :
+    references = sinfo["references"]
+    for rname, refpath in references.items() :
+        assert os.path.isfile(refpath)
+        SAMPLES.append(sample)
+        RNAMES.append(rname)
+
+# -------------------------------------------------------------------------------------------
 
 rule all:
     input:
-        expand("stats/{sample}.depth.window.tsv", sample=samples),
-        expand("stats/{sample}.mapped.txt", sample=samples)
+        expand("stats/depth/{sample}.{rname}.depth.window.1kb.tsv.gz", zip, sample=SAMPLES, rname=RNAMES),
+        expand("stats/mapping/{sample}.{rname}.mapped.txt", zip, sample=SAMPLES, rname=RNAMES)
 
-rule samtools_sort:
+rule minimap2:
     input:
-        "samfiles/{sample}.sam"
+        r1 = lambda wildcards: config[wildcards.sample]["r1"],
+        r2 = lambda wildcards: config[wildcards.sample]["r2"],
+        reference = lambda wildcards: config[wildcards.sample]["references"][wildcards.rname]
     output:
-        "sorted_bam/{sample}.bam"
+        temp("data/sorted_bam/{sample}.{rname}.bam")
+    params:
+        rg = "@RG\\tID:{sample}\\tSM:{sample}\\tLB:{rname}"
+    threads:
+        8
+    resources:
+        mem_mb = lambda wc, attempt: attempt * 32000
+    log:
+        "logs/bwa/{sample}.{rname}.log"
     shell:
-        "samtools sort {input} > {output}"
+        "(minimap2 -ax sr -t {threads} {input.reference} {input.r1} {input.r2} \
+            | samtools sort -o {output}) 2> {log}"
+
+rule index:
+    input:
+        "data/sorted_bam/{sample}.{rname}.bam"
+    output:
+        temp("data/sorted_bam/{sample}.{rname}.bam.bai")
+    shell:
+        "samtools index {input}"
+
+rule idxstats:
+    input:
+        bam = "data/sorted_bam/{sample}.{rname}.bam",
+        bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
+    output:
+        "data/sorted_bam/{sample}.{rname}.idxstats"
+    shell:
+        "samtools idxstats {input.bam} > {output}"
 
 rule stat_mapped:
     input:
-        "sorted_bam/{sample}.bam"
+        bam = "data/sorted_bam/{sample}.{rname}.bam",
+        bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
     output:
-        "stats/{sample}.mapped.txt"
+        "stats/mapping/{sample}.{rname}.mapped.txt"
     shell:
-        "scripts/mapped.stat.sh {input} > {output}"
-
-rule samtools_mapped:
-    input:
-        "sorted_bam/{sample}.bam"
-    output:
-        "mapped_bam/{sample}.bam"
-    shell:
-        "samtools view -F 12 -h {input} > {output}"
+        "scripts/mapped.stat.sh {input.bam} > {output}"
 
 rule samtools_depth:
     input:
-        "mapped_bam/{sample}.bam"
+        bam = "data/sorted_bam/{sample}.{rname}.bam",
+        bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
     output:
-        "depths/{sample}.tsv.gz"
+        "data/depths/{sample}.{rname}.tsv.gz"
     shell:
-        "samtools depth -aa {input} | gzip > {output}"
+        "samtools depth {input.bam} | gzip > {output}"
 
 rule depth_window:
     input:
-        "depths/{sample}.tsv.gz"
+        "data/depths/{sample}.{rname}.tsv.gz",
+        "data/sorted_bam/{sample}.{rname}.idxstats"
     output:
-        "stats/{sample}.depth.window.tsv"
+        "stats/depth/{sample}.{rname}.depth.window.tsv.gz"
+    resources:
+        mem_mb = 8192
     script:
         "scripts/window_depth.py"
+
+rule depth_window_1kb:
+    input:
+        "stats/depth/{sample}.{rname}.depth.window.tsv.gz",
+        "data/sorted_bam/{sample}.{rname}.idxstats"
+    output:
+        "stats/depth/{sample}.{rname}.depth.window.1kb.tsv.gz"
+    resources:
+        mem_mb = 8192
+    script:
+        "scripts/window_depth_1kb.py"

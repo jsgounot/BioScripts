@@ -1,30 +1,46 @@
 # -*- coding: utf-8 -*-
 # @Author: jsgounot
-# @Date:   2020-12-09 09:56:48
+# @Date:   2021-08-30 10:12:19
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2020-12-09 10:13:45
-
+# @Last Modified time: 2021-08-30 15:49:34
 
 import pandas as pd
-
-WINDOWSIZE = 10000
-QUANTILE = .95 # < 1
-HEADER = ('contig', 'position', 'coverage')
+import numpy as np
 
 depthfile = snakemake.input[0]
-outfile   = snakemake.output[0]
+idxstat   = snakemake.input[1]
+depthw    = snakemake.output[0]
 
-if depthfile.endswith(".gz") :
-	df = pd.read_csv(depthfile, compression='gzip', sep="\t", names=HEADER)
-else :
-	df = pd.read_csv(depthfile, sep="\t", names=HEADER)
+def iterate_depth(fname, window=50, chunksize=100000):
+    kwargs = {
+        "sep": "\t",
+        "compression": "gzip",
+        "names": ["contig", "position", "coverage"],
+        "chunksize": chunksize
+    }
+    
+    with pd.read_csv(fname, ** kwargs) as reader:
+        for sdf in reader:
+            sdf["window"] = (sdf["position"] // window) * window
+            sdf = sdf.groupby(["contig", "window"])["coverage"].sum()
+            sdf = sdf.reset_index()
+            yield sdf
 
-df["window"] = (df["position"] // WINDOWSIZE) * WINDOWSIZE
-df = df.groupby(["contig", "window"])["coverage"].mean()
-df = df.rename("mean coverage").reset_index()
+def yield_window_idxstat(idxstat, window=50):
+    names = ["contig", "length", "mapped", "unmapped"]
+    idxstatdf = pd.read_csv(idxstat, sep="\t", names=names, skipfooter=1, usecols=[0, 1])
 
-if QUANTILE :
-	quantile = df["mean coverage"].quantile(QUANTILE)
-	df.loc[df["mean coverage"] > quantile, "mean coverage"] = quantile
+    for contig, length in zip(idxstatdf["contig"], idxstatdf["length"]):
+        windows = np.arange(0, length + 1, window)
+        windows = pd.Series(windows).rename("window").to_frame()
+        windows["contig"] = contig
+        windows = windows[["contig", "window"]]
+        yield windows
 
-df.to_csv(outfile, sep="\t")
+df = pd.concat(iterate_depth(depthfile))
+df = df.groupby(["contig", "window"])["coverage"].sum()
+df = df.reset_index()
+  
+windows = pd.concat(yield_window_idxstat(idxstat, 50))
+df = windows.merge(df, on=["contig", "window"], how="left").fillna(0)
+df.to_csv(depthw, index=False, compression="gzip", sep="\t")
