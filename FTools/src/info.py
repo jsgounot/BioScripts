@@ -54,9 +54,6 @@ def run_default(files, sort="ID", head=0, nsep=False, ** fkwargs) :
 
             yield fname, df
 
-def add_total(df):
-    pass
-
 def seqinfo(seq) :
     seq = seq.upper()
     gc, n, length = seq.count("G") + seq.count("C"), seq.count("N"), len(seq)
