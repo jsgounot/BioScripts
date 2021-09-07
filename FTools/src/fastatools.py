@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-08-10 12:14:12
+# @Last Modified time: 2021-09-07 11:56:53
 
 import os, sys
 
@@ -26,7 +26,7 @@ def cli():
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--nvalue', type=int, help="N value to consider (N50, N90). Default 50", default=50)
 @click.option('--nsep', help="Add separator to numbers", is_flag=True)
-@click.option('--fullname', help="Replace base name with full name", is_flag=True)
+@click.option('--fullname', help="Replace basename with full name", is_flag=True)
 @click.option('--cpath', help="Try to complete the relative path with the absolute path", is_flag=True)
 @click.option('--outfile', type=str, help="Path of the TSV table (default stdout)", default="")
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
@@ -81,10 +81,12 @@ def generate(* args, ** kwargs) :
 @click.option('--sort', type=str, help="Column name used to sort results", default="ID")
 @click.option('--head', type=int, help="N first rows to display", default=0)
 @click.option('--names', type=str, multiple=True, help="Extract only provided header names")
-@click.option('--write', help="Write resulting table in file_name.fstats.tsv", is_flag=True)
 @click.option('--force', help="Force analyze of unlikely fasta file", is_flag=True)
 @click.option('--basecount', help="Return basecount instead", is_flag=True)
 @click.option('--nsep', help="Add separator to numbers", is_flag=True)
+@click.option('--asone', help="Produce a single dataframe", is_flag=True)
+@click.option('--fullname', help="Replace basename with full name, imply --asone", is_flag=True)
+@click.option('--outfile', type=str, help="Path of the TSV table (default stdout), imply --asone", default="")
 def info(* args, ** kwargs) :
     infoc.run(* args, ** kwargs)
 
