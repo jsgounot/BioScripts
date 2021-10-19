@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2020-12-08 11:27:43
 # @Last modified by:   jsgounot
-# @Last Modified time: 2021-09-07 11:56:53
+# @Last Modified time: 2021-10-19 16:43:47
 
 import os, sys
 
@@ -51,7 +51,7 @@ def compare(* args, ** kwargs) :
 @click.option('--maxsize', type=int, help="Sequence maximum size to consider", default=0)
 @click.option('--start', type=int, help="Start position", default=-1)
 @click.option('--end', type=int, help="End position", default=-1)
-@click.option('--names', type=str, default=[], help="Extract only provided header names - Use : --names name1 name2 name3")
+@click.option('--names', type=str, multiple=True, help="Extract only provided header names - Use : --names name1 name2 name3")
 @click.option('--revcomp', help="Reverse complete DNA sequence", is_flag=True)
 @click.option('--ncount', type=int, default=0, help="Sample only a number n of sequences from the output")
 @click.option('--rand', help="Randomly selected sequences, can be coupled with ncount to generate random sampling", is_flag=True)
