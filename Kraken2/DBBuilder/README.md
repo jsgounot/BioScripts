@@ -50,3 +50,7 @@ You will need an existing taxonomic directory to produce your database and more 
 ## Rnode parameter
 
 The `rnode` parameter is the taxid node where your sequence is going to refere to. You can use a value of `2` if you're using the provided nodes and names files (corresponding to bacteria) but you might need to change this value if you're using another taxonomy database.
+
+## On how to create a database for a dataset
+
+Kraken database should be composed by non overlapped genome content. This means that samples from the same species should be dereplicated first before making the database. Otherwise, similar genomic regions will be accounted **only** to the upper node instead of being attibuted to the database samples. This can be partially saved by bracken but dereplication is always a good idea. Moreover, once you have dereplicated your genomes, you can still concatenated all genomes from the sample cluster to account for intracluster (intraspecies) variability. 
