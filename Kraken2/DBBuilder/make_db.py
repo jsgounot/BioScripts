@@ -1,20 +1,31 @@
+# -*- coding: utf-8 -*-
+# @Author: jsgounot
+# @Date:   2021-11-14 17:56:19
+# @Last Modified by:   jsgounot
+# @Last Modified time: 2021-11-15 15:14:17
+
 import click
-import glob, os, sys, shutil
+import glob, os, sys, shutil, csv
 
 from Bio import SeqIO
 from multiprocessing import Pool
+from collections import defaultdict
+
+bname = os.path.basename
 
 @click.command()
 @click.argument('fastas', type=str)
 @click.argument('outdir', type=str)
-@click.argument('rnode', type=int)
+@click.option('--rnode', default=2, type=int, help="mother taxid node")
+@click.option('--taxidsfile', default='', type=str, help="fname to taxid map, see readme")
+@click.option('--ignore_missing_taxids', default=False, type=bool, is_flag=True, help="ignore missing taxids")
 @click.option('--taxonomy', default="", type=str, help="taxonomy directory")
 @click.option('--krakenb', default="kraken2-build", type=str, help="kraken2-build path")
 @click.option('--krakeni', default="kraken2-inspect", type=str, help="kraken2-inspect path")
 @click.option('--brackenb', default="bracken-build", type=str, help="bracken-build path")
 @click.option('--startid', default=0, type=int, help="The starting value for your taxonomic ids")
 @click.option('--threads', default=1, type=int)
-def run(fastas, outdir, rnode, taxonomy, krakenb, krakeni, brackenb, startid, threads) :
+def run(fastas, outdir, rnode, taxidsfile, ignore_missing_taxids, taxonomy, krakenb, krakeni, brackenb, startid, threads) :
     
     if os.path.isdir(outdir) :
         raise Exception("Directory already exists : %s" %(outdir))
@@ -54,25 +65,21 @@ def run(fastas, outdir, rnode, taxonomy, krakenb, krakeni, brackenb, startid, th
     print ("done")
 
     print ("Update names and nodes files")
-    taxids = {fname : idx for idx, fname in enumerate(fnames, start=startid)}
-    shorts = {fname : os.path.basename(fname) for fname in fnames}
-    separator = "\t|\t"
+    if taxidsfile: taxids = read_taxidsfile(taxidsfile, fnames, startid, ignore_missing_taxids)
+    else: taxids = {idx: [fname] for idx, fname in enumerate(fnames, start=startid)}
 
     # names
     outfile = os.path.join(taxdir, "names.dmp")
     with open(outfile, "a") as f :
-        for fname in fnames :
-            tid = taxids[fname]
-            name = shorts[fname]
+        for tid, fnames in taxids.items():
+            name = 'taxid_' + str(tid) + ':' + bname(fnames[0])
             f.write("%s\t|\t%s\t|\t\t|\tscientific name\t|\n" %(tid, name))
 
     # nodes
     outfile = os.path.join(taxdir, "nodes.dmp")
     with open(outfile, "a") as f :
-        for fname in fnames :
-            print (fname, tid)
-            tid = taxids[fname]
-            f.write("%s\t|\t2\t|\tspecies\t|\t\t|\t0\t|\t1\t|\t11\t|\t1\t|\t0\t|\t1\t|\t0\t|\t0\t|\t\t|\n" %(tid))
+        for tid in taxids:
+            f.write("%i\t|\t%i\t|\tspecies\t|\t\t|\t0\t|\t1\t|\t11\t|\t1\t|\t0\t|\t1\t|\t0\t|\t0\t|\t\t|\n" %(tid, rnode))
 
     # add to library
     # need to create a custom fasta file with specific header
@@ -80,8 +87,10 @@ def run(fastas, outdir, rnode, taxonomy, krakenb, krakeni, brackenb, startid, th
     tmp_fdir = os.path.join(outdir, "tmp")
     os.makedirs(tmp_fdir)
     pool = Pool(processes=threads)
-    for fname in fnames :
-        pool.apply_async(make_tmp_files, args=(fname, taxids[fname], tmp_fdir))
+
+    for tid, fnames in taxids.items():
+        for idx, fname in enumerate(fnames):
+            pool.apply_async(make_tmp_files, args=(fname, tid, idx, tmp_fdir))
 
     pool.close()
     pool.join()
@@ -89,6 +98,7 @@ def run(fastas, outdir, rnode, taxonomy, krakenb, krakeni, brackenb, startid, th
     print ("Add libraries")
     cmdline = "find %s -name '*.fa' -print0 | xargs -P %i -0 -I{} -n1 %s --add-to-library {} --db %s" %(
         tmp_fdir, threads, krakenb, outdir)
+
     print (cmdline)
     os.system(cmdline)
 
@@ -107,18 +117,44 @@ def run(fastas, outdir, rnode, taxonomy, krakenb, krakeni, brackenb, startid, th
     os.system(cmdline)
 
     # run bracken build
-    print ("Build braken database")
+    print ("Build bracken database")
     cmdline = "%s -d %s -t %i" %(brackenb, outdir, threads)
     print (cmdline)
     os.system(cmdline)
-
 
 def names_maxtaxid(names) :
     with open(names) as  f :
         return max(int(line.split()[0])
             for line in f)
 
-def make_tmp_files(fname, taxid, outdir) :
+def read_taxidsfile(taxidsfile, fnames, startid, ignore_missing_taxids):
+    fnames = set(fnames)
+    taxids = defaultdict(list)
+
+    with open(taxidsfile) as csvfile:
+        reader = csv.reader(csvfile, delimiter=',')
+        for row in reader:
+            if len(row) != 2: continue
+            fname, tid = row
+
+            if fname not in fnames:
+                print (fname, 'not found in fnames, ignore')
+                continue
+
+            tid = int(tid) + startid
+            taxids[tid].append(fname)
+
+    missing = set(fnames) - {fname for fnames in taxids.values() for fname in fnames}
+
+    if missing:
+        print (len(missing), 'missing fnames ..., first one: ', sorted(missing)[0])
+        if not ignore_missing_taxids:
+            raise Exception('Missing taxids raised an error')
+
+    return taxids
+
+
+def make_tmp_files(fname, taxid, idx, outdir) :
     print ("Create temp file : %s" %(fname))
         
     fdata = list(SeqIO.parse(fname, "fasta"))
@@ -126,7 +162,7 @@ def make_tmp_files(fname, taxid, outdir) :
         record.id = record.name = record.id + "|kraken:taxid|" + str(taxid)
     
     # Write, process and remove
-    tmp_fasta = os.path.join(outdir, "tmp.fasta.%i.fa" %(taxid))
+    tmp_fasta = os.path.join(outdir, "tmp.fasta.%i.%i.fa" %(taxid, idx))
     SeqIO.write(fdata, tmp_fasta, "fasta")
 
 if __name__ == '__main__':
