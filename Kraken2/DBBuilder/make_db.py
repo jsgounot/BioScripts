@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-11-14 17:56:19
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-11-15 15:14:17
+# @Last Modified time: 2021-12-09 13:00:39
 
 import click
 import glob, os, sys, shutil, csv
@@ -72,7 +72,7 @@ def run(fastas, outdir, rnode, taxidsfile, ignore_missing_taxids, taxonomy, krak
     outfile = os.path.join(taxdir, "names.dmp")
     with open(outfile, "a") as f :
         for tid, fnames in taxids.items():
-            name = 'taxid_' + str(tid) + ':' + bname(fnames[0])
+            name = bname(fnames[0])
             f.write("%s\t|\t%s\t|\t\t|\tscientific name\t|\n" %(tid, name))
 
     # nodes

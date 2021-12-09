@@ -58,3 +58,7 @@ You will need an existing taxonomic directory to produce your database and more 
 ## Rnode parameter
 
 The `rnode` parameter is the taxid node where your sequence is going to refere to. You can use a value of `2` if you're using the provided nodes and names files (corresponding to bacteria) but you might need to change this value if you're using another taxonomy database.
+
+## What is going to reported in your report
+
+The basename of your files, if multiple files are used for one single node, one of these files will be pick (should be the first one, but might be random).
