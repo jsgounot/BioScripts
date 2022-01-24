@@ -1,0 +1,63 @@
+from collections import defaultdict
+
+# Change this also for rule prodigal
+fnames = glob_wildcards('path/to/your/mag/{mid}.fa')
+MID = fnames.mid
+
+print (MID)
+
+CAZYDB = 'database/CAZyDB.09242021.fa.gz'
+CMETA = 'database/cazy_data.txt'
+
+rule all:
+    input:
+        'diamond/output.refined.tsv'
+
+rule prodigal:
+    input:
+        'path/to/your/mag/{mid}.fa'
+    output:
+        genes = 'prodigal/{mid}.genes.gbk',
+        proteins = 'prodigal/{mid}.prots.fa',
+    shell:
+        'prodigal -i {input} -o {output.genes} -a {output.proteins}'
+    
+rule rename_prot_header:
+    input:
+        'prodigal/{mid}.prots.fa'
+    output:
+        temp('prodigal/{mid}.prots.rehead.fa')
+    script:
+        'rename_header.py'
+
+rule cat_all:
+    input:
+        expand('prodigal/{mid}.prots.rehead.fa', mid=MID)
+    output:
+        temp('diamond/input.fa.gz')
+    threads:
+        100
+    shell:
+        'cat {input} | pigz -9 -p {threads} > {output}'
+
+rule diamond:
+    input:
+        'diamond/input.fa.gz'
+    output:
+        'diamond/output.tsv'
+    params:
+        cazydb = CAZYDB
+    threads:
+        100
+    shell:
+        'diamond blastp -d {params.cazydb} -e 1e-102 -q {input} -k 1 -p {threads} -o {output} -f 6'
+
+rule refine_diamond:
+    input:
+        'diamond/output.tsv'
+    output:
+        'diamond/output.refined.tsv'
+    params:
+        cmeta = CMETA
+    script:
+        'addCaZyInfo.py'
