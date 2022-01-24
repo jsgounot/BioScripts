@@ -1,0 +1,68 @@
+import os, json, glob
+from itertools import permutations
+
+FNAMES = './data/*'
+FNAMES = sorted(glob.glob(FNAMES))
+idxs = list(range(len(FNAMES)))
+idx1, idx2 = list(zip(* permutations(idxs, 2)))
+
+rule all:
+	input:
+		expand('pairwise_mummer/res/{idx1}.{idx2}.dnadiff/{idx1}.{idx2}.report', zip, idx1=idx1, idx2=idx2),
+		expand('pairwise_mummer/res/{idx1}.{idx2}.coords', zip, idx1=idx1, idx2=idx2),
+		expand('pairwise_mummer/seqs/idx.names.json')
+
+rule make_idx_name:
+	output:
+		'pairwise_mummer/seqs/idx.names.json'
+	params:
+		FNAMES
+	script:
+		'make_table_idx_name.py'
+
+rule make_fasta:
+	input:
+		lambda wc: FNAMES[int(wc.idx)]
+	output:
+		'pairwise_mummer/seqs/{idx}.fasta'
+	shell:
+		"""
+		file='{input}'
+		if [ "${{file: -3}}" == ".gz" ]
+		then
+			gunzip -c $file > {output}
+		else
+			cp $file {output}
+		fi
+		"""
+
+rule run_mummer:
+	input:
+		seq1 = 'pairwise_mummer/seqs/{idx1}.fasta',
+		seq2 = 'pairwise_mummer/seqs/{idx2}.fasta'
+	output:
+		'pairwise_mummer/res/{idx1}.{idx2}.delta'
+	params:
+		prefix = 'pairwise_mummer/res/{idx1}.{idx2}'
+	shell:
+		'nucmer -c 100 -p {params.prefix} {input.seq1} {input.seq2}'
+
+rule dna_diff:
+	input:
+		delta = 'pairwise_mummer/res/{idx1}.{idx2}.delta',
+		seq1 = 'pairwise_mummer/seqs/{idx1}.fasta',
+		seq2 = 'pairwise_mummer/seqs/{idx2}.fasta'
+	output:
+		'pairwise_mummer/res/{idx1}.{idx2}.dnadiff/{idx1}.{idx2}.report'
+	params:
+		prefix = 'pairwise_mummer/res/{idx1}.{idx2}.dnadiff/{idx1}.{idx2}'
+	shell:
+		'dnadiff -d {input.delta} -p {params.prefix}'
+
+rule showcoords:
+	input:
+		'pairwise_mummer/res/{idx1}.{idx2}.delta'
+	output:
+		'pairwise_mummer/res/{idx1}.{idx2}.coords'
+	shell:
+		'show-coords -drlT {input} > {output}'
