@@ -1,19 +1,21 @@
 
 # Kraken2 DBBUILDER
 
-A simple script to help to quickly produce a [kraken](http://ccb.jhu.edu/software/kraken2/) database from scratch. This script is basicaly following recommandation from the [documentation](https://github.com/DerrickWood/kraken2/wiki/Manual#custom-databases) with basic options. Please refere to this document for additionnal parameters. Additionnaly, the script will also create in the same directory the [bracken](https://ccb.jhu.edu/software/bracken/) database.
+A simple script to help to quickly produce a [kraken](http://ccb.jhu.edu/software/kraken2/) database from scratch. This script is basicaly following recommandation from the [documentation](https://github.com/DerrickWood/kraken2/wiki/Manual#custom-databases) with basic options and will also create in the same directory the [bracken](https://ccb.jhu.edu/software/bracken/) database. 
 
-# Dependancies
+#### Before going further
+
+Kraken classic database use NCBI taxonomic classifications with 2 files: `nodes.dmp` and `names.dmp` (see [here](https://ftp.ncbi.nih.gov/pub/taxonomy/taxdump_readme.txt) for official files description, files can be truncated). This means you need to associate your genomes to either an existing NCBI taxonomic ID or create a new one. All taxonomic ID and relationship between them are saved in the `nodes.dmp` file, while the `names.dmp` files store each node metadata. 
+
+1. If your goal is just to include a couple of missing species / strain into a pre-existing database, please look at the kraken2 `--add-to-library` option. You will need to add an existing or novel taxid of your species into the fasta header too. 
+2. If your goal is to create a new database from scratch based on a MAGs dataset, use this script.
+
+### Dependancies
 
 Python
 
 * click
 * biopython
-
-Softwares
-
-* kraken2
-* bracken
 
 Tested on :
 
@@ -22,43 +24,67 @@ Tested on :
 
 `conda create -n kraken -c bioconda kraken2 bracken click biopython`
 
-# How to
+### How to
 
 ```
-python make_db.py --help
+$ python make_db.py --help
 Usage: make_db.py [OPTIONS] FASTAS OUTDIR
 
 Options:
-  --rnode INTEGER          mother taxid node
-  --taxidsfile TEXT        fname to taxid map, see readme
-  --ignore_missing_taxids  ignore missing taxids
-  --taxonomy TEXT          taxonomy directory
-  --krakenb TEXT           kraken2-build path
-  --krakeni TEXT           kraken2-inspect path
-  --brackenb TEXT          bracken-build path
-  --startid INTEGER        The starting value for your taxonomic ids
+  --krakenb TEXT         kraken2-build path
+  --krakeni TEXT         kraken2-inspect path
+  --brackenb TEXT        bracken-build path
+  -r, --gtdbtk_res TEXT  GTDBtk result files
+  --nodes TEXT           GTDB archeal metadata file
+  --names TEXT           GTDB bacterial metadata file
+  --ext TEXT             Fasta files extension (.fa, .fasta), usefull if you
+                         want to link to DRep results
+  --drep_cdb TEXT        DRep CDB result for novel SPECIES
+  --no-prune             Don't prune the tree to keep only used nodes
   --threads INTEGER
-  --help                   Show this message and exit.
+  --help                 Show this message and exit.
 ```
 
-Most of the options should not be used if you're using a conda install. You should try with a subset of you sequences first (< 10 fasta)
+#### Command lines an input files
 
-## taxidsfile
+Depending of your input files and what you want, there are different ways to use this tool
 
-In case you have genomes from the same species or cluster you want to group together under the same node, you need to provide a simple csv file (without header) with two columns, first one being the fasta path (as provided in the software input), the second being the clusterID (an integer). Note that this integer will be added to the higher taxid from the current database to avoid duplicated taxid in the database. Node will be named after this taxid and the first MAG found under this taxid, example `taxid_2819974:your.bin.name.fa`, which will be reported in the kraken result. Option `ignore_missing_taxids` (default value = `True`) defines if the script should raise an Error if one genome is not found in the `taxidsfile`.
+##### You don't care about the taxonomic tree
 
-## Memory usage
+`python make_db.py '*.fasta' outdir`
+
+This will create a completly fake tree where each node (species,genus,...,domain) will be tagged with a unique identifier (novel*i*) and with each sequence being completly independant of other sequences. This is <u>not</u> recommanded but can be interesting if you only want to check the classification rate though.
+
+##### You only have dreplication data (with drep)
+
+You can provide your [DRep](https://github.com/MrOlm/drep) information (CBD file). This will only group sequences from the same cluster into the same species and will not provide meaningful information for parent nodes (genus and higher). 
+
+`python make_db.py '*.fasta' outdir --drep-cdb Cdb.csv`
+
+##### You only have GTDBTk results
+
+GTDBTk classification can be used to guide the generation of the tree. This will generate a reticulated full tree with meaningful taxon name. The taxonomic ids will be completly random though.
+
+`python make_db.py '*.fasta' outdir -r gtdbtk.ar122.summary.tsv -r gtdbtk.bac120.summary.tsv `
+
+You will most likely need to use the `--ext` option as well to match your files basename to GTDBtk identifiers.
+
+**Note**: In case of a novel nodes (for example `s__` for a novel species), the script will create a unique identifiers like `novel1`, `novel2`, etc. This can lead to potential issues in the taxonomy and can be fixed if you did a dereplication analysis of you sample. Let's say you have 3 novel genomes with 2 you know come from the same species and 1 which is the only representative of this novel species. All are coming from the same genus. By default the script is unable to know if genomes come from the same or different species, therefore 3 novel species will be created. To fix this, either you modify GTDBTk file to reflect the change using a unique species identifier to add to the taxonomic rank, such as `s__` becoming `s__novel_species1` , or you can use the `--drep-cbd` option.
+
+##### You have GTDBTk results that you want to map over an existing taxonomic tree
+
+You might want to use an existing taxonomic files (`names.dmp` and `nodes.dmp`) from another database **which was also generated with GTDBTk results**, like the [UHGG database](http://ftp.ebi.ac.uk/pub/databases/metagenomics/mgnify_genomes/human-gut/v1.0/uhgg_kraken2-db/taxonomy/), to map your GTDBTk results. It means that the `names.dmp` files must contain names like `g__Turicibacter`. This will create a tree with similar taxon id than the one provided in the taxonomic files.
+
+`python make_db.py '*.fasta' outdir -r gtdbtk.ar122.summary.tsv -r gtdbtk.bac120.summary.tsv --nodes nodes.dmp --names names.dmp`
+
+By default, only nodes which are found in your sequences will be conserved, but you can keep them all with `no-prune`. This is not recommended though.
+
+##### You can combine everything
+
+`python make_db.py '*.fasta' outdir -r gtdbtk.ar122.summary.tsv -r gtdbtk.bac120.summary.tsv --nodes nodes.dmp --names names.dmp --drep-cdb Cdb.csv`
+
+This will take the GTDBTk results, map them against the known tree and will group novel genomes from the same cluster into the same taxonomic node. This is by far the cleanest solution you can provide. 
+
+#### Memory usage
 
 Please be aware that kraken2 database building may need a lot of memory, especially if you use thousand of sequences.
-
-## names and nodes files
-
-You will need an existing taxonomic directory to produce your database and more precisely the `names.dmp` and `nodes.dmp` files inside it. You can download such directory with this command line `kraken2-build --download-taxonomy --db $DBNAME` (such as `bacteria`). However you can also unzip the names and nodes files I provide here and the script will automaticaly use them if no taxonomic directory is provided (downloaded 18 March 2021).
-
-## Rnode parameter
-
-The `rnode` parameter is the taxid node where your sequence is going to refere to. You can use a value of `2` if you're using the provided nodes and names files (corresponding to bacteria) but you might need to change this value if you're using another taxonomy database.
-
-## What is going to reported in your report
-
-The basename of your files, if multiple files are used for one single node, one of these files will be pick (should be the first one, but might be random).

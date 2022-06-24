@@ -2,31 +2,30 @@
 # @Author: jsgounot
 # @Date:   2021-11-14 17:56:19
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2021-12-09 13:00:39
+# @Last Modified time: 2022-06-24 10:02:18
 
-import click
-import glob, os, sys, shutil, csv
-
+import glob, os, shutil
 from Bio import SeqIO
 from multiprocessing import Pool
 from collections import defaultdict
 
-bname = os.path.basename
+import gtdbtk2ncbi
+import click
 
 @click.command()
 @click.argument('fastas', type=str)
 @click.argument('outdir', type=str)
-@click.option('--rnode', default=2, type=int, help="mother taxid node")
-@click.option('--taxidsfile', default='', type=str, help="fname to taxid map, see readme")
-@click.option('--ignore_missing_taxids', default=False, type=bool, is_flag=True, help="ignore missing taxids")
-@click.option('--taxonomy', default="", type=str, help="taxonomy directory")
 @click.option('--krakenb', default="kraken2-build", type=str, help="kraken2-build path")
 @click.option('--krakeni', default="kraken2-inspect", type=str, help="kraken2-inspect path")
 @click.option('--brackenb', default="bracken-build", type=str, help="bracken-build path")
-@click.option('--startid', default=0, type=int, help="The starting value for your taxonomic ids")
+@click.option('--gtdbtk_res', '-r', type=str, multiple=True, help="GTDBtk result files")
+@click.option('--nodes', type=str, default='', help="GTDB archeal metadata file")
+@click.option('--names', type=str, default='', help="GTDB bacterial metadata file")
+@click.option('--ext', type=str, default='', help="Fasta files extension (.fa, .fasta), usefull if you want to link to gtdbtk files")
+@click.option('--drep_cdb', type=str, default='', help="DRep CBD result for novel SPECIES")
+@click.option('--no-prune', is_flag=True, help='Don\'t prune the tree to keep only used nodes')
 @click.option('--threads', default=1, type=int)
-def run(fastas, outdir, rnode, taxidsfile, ignore_missing_taxids, taxonomy, krakenb, krakeni, brackenb, startid, threads) :
-    
+def run(fastas, outdir, krakenb, krakeni, brackenb, gtdbtk_res, nodes, names, ext, drep_cdb, no_prune, threads) :
     if os.path.isdir(outdir) :
         raise Exception("Directory already exists : %s" %(outdir))
 
@@ -34,52 +33,21 @@ def run(fastas, outdir, rnode, taxidsfile, ignore_missing_taxids, taxonomy, krak
     print ("%i files to use" %(len(fnames)))
     assert fnames
 
-    # look for taxonomic dir
-    taxonomy = taxonomy or "./taxonomy"
-    if not os.path.isdir("taxonomy") :
-        raise Exception("taxonomy directory not found : %s" %(taxonomy))
-
-    # look for nodes and names
-    nodes = os.path.join(taxonomy, "nodes.dmp")
-    if not os.path.isfile(nodes) : 
-        raise Exception("Nodes file not found in taxonomy directory : %s" %(nodes))
-
-    names = os.path.join(taxonomy, "names.dmp")
-    if not os.path.isfile(names) : 
-        raise Exception("Names file not found in taxonomy directory : %s" %(names))
-
-    if not startid :
-        print ("start taxid (startid) not given, search from names file ...")
-        maxtaxid = names_maxtaxid(names)
-        startid = maxtaxid + 1
-        print ("found maxtaxid %i, startid sets to %i" %(maxtaxid, startid))
+    bnames = {os.path.basename(fname) for fname in fnames}
+    if len(bnames) != len(fnames):
+        raise Exception('Some files share the same basename, which can lead to error during database creation.')
 
     # create of nodes and names
     taxdir = os.path.join(outdir, "taxonomy")
     os.makedirs(taxdir)
 
-    # copy files
-    print ("Copy nodes and names ...")
-    shutil.copyfile(names, os.path.join(taxdir, "names.dmp"))
-    shutil.copyfile(nodes, os.path.join(taxdir, "nodes.dmp"))
-    print ("done")
-
-    print ("Update names and nodes files")
-    if taxidsfile: taxids = read_taxidsfile(taxidsfile, fnames, startid, ignore_missing_taxids)
-    else: taxids = {idx: [fname] for idx, fname in enumerate(fnames, start=startid)}
-
-    # names
-    outfile = os.path.join(taxdir, "names.dmp")
-    with open(outfile, "a") as f :
-        for tid, fnames in taxids.items():
-            name = bname(fnames[0])
-            f.write("%s\t|\t%s\t|\t\t|\tscientific name\t|\n" %(tid, name))
-
-    # nodes
-    outfile = os.path.join(taxdir, "nodes.dmp")
-    with open(outfile, "a") as f :
-        for tid in taxids:
-            f.write("%i\t|\t%i\t|\tspecies\t|\t\t|\t0\t|\t1\t|\t11\t|\t1\t|\t0\t|\t1\t|\t0\t|\t0\t|\t\t|\n" %(tid, rnode))
+    print ("Generate NCBI tree")
+    if not gtdbtk_res: 
+        emptyfname = os.path.join(taxdir, 'empty.gtdbtkres.tsv')
+        gtdbtk2ncbi.create_empty(fnames, emptyfname)
+        gtdbtk_res = [emptyfname]
+    
+    taxids = gtdbtk2ncbi.main(gtdbtk_res, taxdir, nodes, names, ext, drep_cdb, no_prune)
 
     # add to library
     # need to create a custom fasta file with specific header
@@ -87,12 +55,19 @@ def run(fastas, outdir, rnode, taxidsfile, ignore_missing_taxids, taxonomy, krak
     tmp_fdir = os.path.join(outdir, "tmp")
     os.makedirs(tmp_fdir)
     pool = Pool(processes=threads)
+    res = []
 
-    for tid, fnames in taxids.items():
-        for idx, fname in enumerate(fnames):
-            pool.apply_async(make_tmp_files, args=(fname, tid, idx, tmp_fdir))
+    for idx, fname in enumerate(fnames):
+        try: tid = taxids[os.path.basename(fname)]
+        except KeyError: raise Exception(f'Basename not found {os.path.basename(fname)}, maybe you should add an extension with option --ext?')
+        res.append(pool.apply_async(make_tmp_files, args=(fname, tid, idx, tmp_fdir)))
 
     pool.close()
+
+    for e in res:
+        # https://stackoverflow.com/a/28660669/5016055
+        e.get()
+
     pool.join()
 
     print ("Add libraries")
@@ -126,33 +101,6 @@ def names_maxtaxid(names) :
     with open(names) as  f :
         return max(int(line.split()[0])
             for line in f)
-
-def read_taxidsfile(taxidsfile, fnames, startid, ignore_missing_taxids):
-    fnames = set(fnames)
-    taxids = defaultdict(list)
-
-    with open(taxidsfile) as csvfile:
-        reader = csv.reader(csvfile, delimiter=',')
-        for row in reader:
-            if len(row) != 2: continue
-            fname, tid = row
-
-            if fname not in fnames:
-                print (fname, 'not found in fnames, ignore')
-                continue
-
-            tid = int(tid) + startid
-            taxids[tid].append(fname)
-
-    missing = set(fnames) - {fname for fnames in taxids.values() for fname in fnames}
-
-    if missing:
-        print (len(missing), 'missing fnames ..., first one: ', sorted(missing)[0])
-        if not ignore_missing_taxids:
-            raise Exception('Missing taxids raised an error')
-
-    return taxids
-
 
 def make_tmp_files(fname, taxid, idx, outdir) :
     print ("Create temp file : %s" %(fname))
