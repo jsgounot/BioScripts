@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2022-06-23 11:38:15
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2022-06-24 09:45:21
+# @Last Modified time: 2022-07-04 10:34:00
 
 import os, csv
 import click
@@ -45,10 +45,9 @@ class Seq:
         return sep.join((self. seqname, str(self.tax_id))) + end
 
 RANKS = 'sgfocpdr'
-RANKSSET = set(RANKS)
 RANKSDEF = {
-    's': 'species', 'g': 'genus', 'f': 'family', 'o': 'order',
-    'c': 'class', 'p': 'phylum', 'd': 'division'
+    't': 'strain', 's': 'species', 'g': 'genus', 'f': 'family', 
+    'o': 'order', 'c': 'class', 'p': 'phylum', 'd': 'division'
 }
 
 NOVEL_IDX = 1
@@ -145,7 +144,7 @@ def write_dataclasses(data, outfile, sep, end='\n'):
 
 # ------------------------------------------------------------------------------------------------
 
-def main(gtdbtk_res, outdir, nodes, names, ext, drep_cdb, no_prune, subset=None) :
+def main(gtdbtk_res, outdir, nodes, names, ext, drep_cdb, no_prune, subset=None, slevel=False) :
     check_file(nodes)
     check_file(names)
     check_dir(outdir)
@@ -169,6 +168,12 @@ def main(gtdbtk_res, outdir, nodes, names, ext, drep_cdb, no_prune, subset=None)
     txt2tid = {name.name_txt: name.tax_id for name in names}
     seqtids = []
 
+    if slevel:
+        global RANKS
+        RANKS = 't' + RANKS
+
+    ranksset = set(RANKS)
+
     for name, classification in parse_gtdbtk_summary(* gtdbtk_res):
         name = name + ext
 
@@ -183,7 +188,10 @@ def main(gtdbtk_res, outdir, nodes, names, ext, drep_cdb, no_prune, subset=None)
             except KeyError:
                 raise Exception(f'Unable to find genome `{name}` in DRep CDB file, maybe the exception is missing?')
 
-        assert len(set(classification) - RANKSSET) == 0
+        if slevel:
+            classification['t'] = name
+
+        assert len(set(classification) - ranksset) == 0
         taxid = rec_check(classification, txt2tid, nodes, names)
         seqtids.append(Seq(name, taxid))
 

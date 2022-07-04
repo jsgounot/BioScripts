@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-11-14 17:56:19
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2022-06-24 10:02:18
+# @Last Modified time: 2022-07-04 10:27:07
 
 import glob, os, shutil
 from Bio import SeqIO
@@ -23,9 +23,10 @@ import click
 @click.option('--names', type=str, default='', help="GTDB bacterial metadata file")
 @click.option('--ext', type=str, default='', help="Fasta files extension (.fa, .fasta), usefull if you want to link to gtdbtk files")
 @click.option('--drep_cdb', type=str, default='', help="DRep CBD result for novel SPECIES")
+@click.option('--add-strain-level', is_flag=True, help='Add a taxonomic ID for each genome as individual strain')
 @click.option('--no-prune', is_flag=True, help='Don\'t prune the tree to keep only used nodes')
 @click.option('--threads', default=1, type=int)
-def run(fastas, outdir, krakenb, krakeni, brackenb, gtdbtk_res, nodes, names, ext, drep_cdb, no_prune, threads) :
+def run(fastas, outdir, krakenb, krakeni, brackenb, gtdbtk_res, nodes, names, ext, drep_cdb, add_strain_level, no_prune, threads) :
     if os.path.isdir(outdir) :
         raise Exception("Directory already exists : %s" %(outdir))
 
@@ -47,7 +48,7 @@ def run(fastas, outdir, krakenb, krakeni, brackenb, gtdbtk_res, nodes, names, ex
         gtdbtk2ncbi.create_empty(fnames, emptyfname)
         gtdbtk_res = [emptyfname]
     
-    taxids = gtdbtk2ncbi.main(gtdbtk_res, taxdir, nodes, names, ext, drep_cdb, no_prune)
+    taxids = gtdbtk2ncbi.main(gtdbtk_res, taxdir, nodes, names, ext, drep_cdb, no_prune, slevel=add_strain_level)
 
     # add to library
     # need to create a custom fasta file with specific header

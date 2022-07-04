@@ -38,8 +38,10 @@ Options:
   --nodes TEXT           GTDB archeal metadata file
   --names TEXT           GTDB bacterial metadata file
   --ext TEXT             Fasta files extension (.fa, .fasta), usefull if you
-                         want to link to DRep results
-  --drep_cdb TEXT        DRep CDB result for novel SPECIES
+                         want to link to gtdbtk files
+  --drep_cdb TEXT        DRep CBD result for novel SPECIES
+  --add-strain-level     Add a taxonomic ID for each genome as individual
+                         strain
   --no-prune             Don't prune the tree to keep only used nodes
   --threads INTEGER
   --help                 Show this message and exit.
@@ -88,3 +90,13 @@ This will take the GTDBTk results, map them against the known tree and will grou
 #### Memory usage
 
 Please be aware that kraken2 database building may need a lot of memory, especially if you use thousand of sequences.
+
+#### Post-compression
+
+After database build, one additional good step is to compress (if not delete) the library folder for data usage. With [pigz](https://linux.die.net/man/1/pigz) and 8 cores:
+
+````bash
+cd yourdatabase
+tar cfv - library/ | pigz -9 -p 8 > library.tar.gz
+````
+
