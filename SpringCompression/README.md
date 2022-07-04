@@ -1,17 +1,49 @@
 # Reads compression using Spring
 
-Snakemake pipeline to compress reads for storage purpose using [Spring](https://github.com/shubhamchandak94/Spring).
-This pipeline has been designed for pre-compressed gzip **Illumina** fastq reads. See Spring option (such as `-l`) for long reads.
-Based on my results, the spring file is around 3 time smaller than the fastq.gz file, both compression and decompression can be threaded.
+Snakemake pipeline to compress reads for storage purpose using [Spring](https://github.com/shubhamchandak94/Spring). This pipeline has been designed to compress **paired-end** illumina reads. To compress single end short-read, you will need to modify the pipeline. Note that [a specific version of Spring](https://github.com/qm2/NanoSpring) has been designed for nanopore reads.
 
-# Safety check and usage
+Based on my results, the spring file is around 3 to 4 times smaller than the fastq.gz file. The major con is the time for compression and decompression, but both operation can be threaded.
 
-Pipeline will compressed all `*.fastq.gz` files found in `./input`. Initial fastq.gz files are conserved and will not be removed.
+### Usage
 
-Once fastq files are compressed, the pipeline will check whether the same initial input can be retrieved using the compressed file. To do that, the spring file is uncompressed and both the new and the original `fastq.gz` files are compared using `zcmp` If both file are identical, the compression is considered successfull. 
+The pipeline will can either work on local `fastq` files or download the files for you with `wget`. In case of local `fastq`, files are not removed from their original location. 
 
-If not (this can arise because of variation in the optional third line which does not have an impact on further analyses), an additionnal step is processed where the third line of each read are removed in both files using `awk` and reads are compared again. This last step is disk usage intensive and I would recommand to have at least the total size of initial reads files as free space on your working disk. Temporary files will be removed along the process.
+You need to feed the pipeline with a json configuration file:
 
-At the end of the pipeline, a `.cmp` file is generated for each reads file. An empty `cmp` file means that no difference has been observed between the original and the uncompressed file. 
+```json
+{
+    "ERR7671874": {
+        "r1": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR767/004/ERR7671874/ERR7671874_1.fastq.gz",
+        "r2": "ftp.sra.ebi.ac.uk/vol1/fastq/ERR767/004/ERR7671874/ERR7671874_2.fastq.gz"
+    },
+    "ERR7671875": {
+        "r1": "/local/path/ERR7671875_1.fastq.gz",
+        "r2": "/local/path/ERR7671875_2.fastq.gz"
+    }
+}
+```
 
-It is really not recommanded, but you can also ignore the safety check using this command line `snakemake --cores 16 --until compress`.
+ The pipeline can be launched (dry-run) this way:
+
+```bash
+snakemake -s spring.snk --configfile spring_config.json -d spring --cores 4 -np
+```
+
+### Workflow
+
+The pipeline will not only compress your fastq file but also check that the compressed file returns the initial file. Workflow for each sample can be summarized this way:
+
+* Compression
+* Decompression
+* Check initial `fastq` files with decompressed `fastq` files (`zcmp`)
+* If diff, remove the third line in all `fastq` file with `awk` (see note) and run the same comparison
+
+All these operations are run with `gziped` `fastq` file. You can also skip the check phase running the pipeline with `--until compress`.
+
+### About the third line
+
+Spring does not conserve the optional part in the third line of the `fastq` file ([fastq format](https://en.wikipedia.org/wiki/FASTQ_format)). This should not be an issue for your analysis since this part is optional but to confirm that only the third line is an issue, an additional `zcmp` is done with `fastq` files without this third line.
+
+### Outputs
+
+You should have both the `spring` files,  `cmp` files which are results from `zcmp` and should be empty. Finally, a table `compression.stat.tsv` contains information about the compression rate for each sample.
