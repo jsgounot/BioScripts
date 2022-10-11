@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2021-11-14 17:56:19
 # @Last Modified by:   jsgounot
-# @Last Modified time: 2022-07-04 10:27:07
+# @Last Modified time: 2022-10-11 14:38:04
 
 import glob, os, shutil
 from Bio import SeqIO
@@ -19,8 +19,8 @@ import click
 @click.option('--krakeni', default="kraken2-inspect", type=str, help="kraken2-inspect path")
 @click.option('--brackenb', default="bracken-build", type=str, help="bracken-build path")
 @click.option('--gtdbtk_res', '-r', type=str, multiple=True, help="GTDBtk result files")
-@click.option('--nodes', type=str, default='', help="GTDB archeal metadata file")
-@click.option('--names', type=str, default='', help="GTDB bacterial metadata file")
+@click.option('--nodes', type=str, default='', help="Pre computed nodes.dmp file (see note)")
+@click.option('--names', type=str, default='', help="Pre computed names.dmp file (see note)")
 @click.option('--ext', type=str, default='', help="Fasta files extension (.fa, .fasta), usefull if you want to link to gtdbtk files")
 @click.option('--drep_cdb', type=str, default='', help="DRep CBD result for novel SPECIES")
 @click.option('--add-strain-level', is_flag=True, help='Add a taxonomic ID for each genome as individual strain')
