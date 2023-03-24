@@ -1,0 +1,64 @@
+import glob, os
+
+rule all:
+	input:
+		expand('{kind}/{kind}.sbt.zip', kind=('archaea', 'fungi', 'protozoa', 'bacteria'))
+
+rule download_summary:
+	output:
+		'{kind}/assembly_summary.txt'
+	shell:
+		'wget https://ftp.ncbi.nlm.nih.gov/genomes/refseq/{wildcards.kind}/assembly_summary.txt -O {output}'
+
+rule get_flist:
+	input:
+		rules.download_summary.output
+	output:
+		'{kind}/url_list.txt'
+	script:
+		'extract_urls.py'
+
+checkpoint download_genomes:
+	input:
+		rules.get_flist.output
+	output:
+		'{kind}/genomes.done'
+	threads:
+		32
+	shell:
+		'(xargs -n 1 -P {threads} wget -q -P {wildcards.kind}/genomes/ < {input}) && touch {output}'
+
+rule sketch:
+	input:
+		'{kind}/genomes/{basename}'
+	output:
+		'{kind}/sigs/{basename}.sig'
+	conda:
+		'sourmash'
+	shell:
+		'sourmash sketch dna {input} -o {output} --name-from-first'
+
+def collectsigs(wc):
+	checkpoints.download_genomes.get(** wc).output[0]
+	fnames = f'{wc.kind}/genomes/*'
+	fnames = glob.glob(fnames)
+	bnames = (os.path.basename(fname) for fname in fnames)
+	return [f'{wc.kind}/sigs/{basename}.sig' for basename in bnames]
+
+rule rzip:
+	input:
+		collectsigs
+	output:
+		'{kind}/sigs.zip'
+	shell:
+		'zip -r {output} {wildcards.kind}/sigs'
+
+rule make_sbt:
+	input:
+		rules.rzip.output
+	output:
+		'{kind}/{kind}.sbt.zip'
+	conda:
+		'sourmash'
+	shell:
+		'sourmash index {output} {input}'
