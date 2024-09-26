@@ -6,7 +6,7 @@ Based on my results, the spring file is around 3 to 4 times smaller than the fas
 
 ### Usage
 
-The pipeline will can either work on local `fastq` files or download the files for you with `wget`. In case of local `fastq`, files are not removed from their original location. 
+The pipeline will can either work on local `fastq` files or download the files for you with `wget`. In case of local `fastq`, files are **not** removed from their original location. You will need to remove the files yourself.
 
 You need to feed the pipeline with a json configuration file:
 
@@ -36,7 +36,7 @@ The pipeline will not only compress your fastq file but also check that the comp
 * Compression
 * Decompression
 * Check initial `fastq` files with decompressed `fastq` files (`zcmp`)
-* If diff, remove the third line in all `fastq` file with `awk` (see note) and run the same comparison
+* If a diff is observed, remove the third line in all `fastq` files with `awk` (see note) and run the same comparison
 
 All these operations are run with `gziped` `fastq` file. You can also skip the check phase running the pipeline with `--until compress`.
 
@@ -46,4 +46,4 @@ Spring does not conserve the optional part in the third line of the `fastq` file
 
 ### Outputs
 
-You should have both the `spring` files,  `cmp` files which are results from `zcmp` and should be empty. Finally, a table `compression.stat.tsv` contains information about the compression rate for each sample.
+You should have both the `spring` files, `cmp` files should be empty. You can double check that all files were checked (no differences observed between the initial fastq and decompressed fasta files) by checking `output/compression.check.txt`, all samples should have  a `True` value in their 3 column. Finally, a table `output/compression.stat.tsv` contains information about the compression rate for each sample.

@@ -20,8 +20,8 @@ for sample, sreads in config.items():
 
 rule all:
     input:
-        expand("output/{name}.spring", name=list(config)),
-        expand("output/{name}.{rid}.cmp", name=list(config), rid=('r1', 'r2')),
+        expand("spring_files/{name}.spring", name=list(config)),
+        "output/compression.check.txt",
         "output/compression.stat.tsv"
 
 rule wget_read:
@@ -37,7 +37,7 @@ rule compress:
         r1 = lambda wc: internal[wc.name]['r1'],
         r2 = lambda wc: internal[wc.name]['r2']
     output:
-        "output/{name}.spring"
+        "spring_files/{name}.spring"
     threads:
         8
     group:
@@ -49,7 +49,7 @@ rule sample_size:
     input:
         r1 = lambda wc: internal[wc.name]['r1'],
         r2 = lambda wc: internal[wc.name]['r2'],
-        co = "output/{name}.spring"
+        co = rules.compress.output
     output:
         'output/{name}.dustat.txt'
     shell:
@@ -57,10 +57,10 @@ rule sample_size:
 
 rule uncompress:
     input:
-        "output/{name}.spring"
+        rules.compress.output
     output:
-        r1 = temp("check/{name}.r1.fastq.gz"),
-        r2 = temp("check/{name}.r2.fastq.gz")
+        r1 = temp("temporary/{name}.r1.fastq.gz"),
+        r2 = temp("temporary/{name}.r2.fastq.gz")
     threads:
         8
     group:
@@ -70,10 +70,10 @@ rule uncompress:
 
 checkpoint raw_cmp:
     input:
-        f1 = "check/{name}.{rid}.fastq.gz",
+        f1 = "temporary/{name}.{rid}.fastq.gz",
         f2 = lambda wc : internal[wc.name][wc.rid]
     output:
-        "output/{name}.{rid}.direct.zcmp"
+        "check/{name}.{rid}.direct.zcmp"
     shell:
         # We need to add `|| true` at the end since zcmp return 
         # exit code 1 if diff is found which make snakemake stop
@@ -86,9 +86,9 @@ checkpoint raw_cmp:
 
 rule awk_spring:
     input:
-        "check/{name}.{rid}.fastq.gz"
+        "temporary/{name}.{rid}.fastq.gz"
     output:
-        temp("check/{name}.{rid}.spring.awked.gz")
+        temp("temporary/{name}.{rid}.spring.awked.gz")
     shell:
         "awk '(NR%4!=3)' <(gzip -dc {input}) | gzip > {output}"
 
@@ -96,16 +96,16 @@ rule awk_original:
     input:
         lambda wc: internal[wc.name][wc.rid]
     output:
-        temp("check/{name}.{rid}.original.awked.gz")
+        temp("temporary/{name}.{rid}.original.awked.gz")
     shell:
         "awk '(NR%4!=3)' <(gzip -dc {input}) | gzip > {output}"
 
 rule check_cmp:
     input:
-        f1 = "check/{name}.{rid}.spring.awked.gz",
-        f2 = "check/{name}.{rid}.original.awked.gz"
+        f1 = rules.awk_spring.output,
+        f2 = rules.awk_original.output
     output:
-        "output/{name}.{rid}.awk.zcmp"
+        "check/{name}.{rid}.awk.zcmp"
     shell:
         "zcmp {input.f1} {input.f2} > {output}"
 
@@ -121,21 +121,29 @@ def aggregate_cmp(wc):
     with checkpoints.raw_cmp.get(name=wc.name, rid=wc.rid).output[0].open() as f:
         content = f.read().strip()
         if not content:
-            print ('empty', wc.name, wc.rid, list(content))
-            return "output/{name}.{rid}.direct.zcmp"
+            print ('empty', wc.name, wc.rid, content)
+            return "check/{name}.{rid}.direct.zcmp"
         else:
-            print ('not empty', wc.name, wc.rid, list(content))
-            return "output/{name}.{rid}.awk.zcmp"
+            print ('not empty, run awk:', wc.name, wc.rid, content)
+            return "check/{name}.{rid}.awk.zcmp"
 
 rule mv_cmp:
     input:
         aggregate_cmp
     output:
-        "output/{name}.{rid}.cmp"
+        "check/{name}.{rid}.cmp"
     priority:
         1
     shell:
-        "mv {input} {output}"
+        "cp {input} {output}"
+
+rule compression_check:
+    input:
+        expand("check/{name}.{rid}.cmp", name=list(config), rid=('r1', 'r2'))
+    output:
+        "output/compression.check.txt"
+    script:
+        "compression_check.py"
 
 rule make_table:
     input:
