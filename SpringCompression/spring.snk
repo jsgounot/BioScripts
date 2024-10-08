@@ -12,11 +12,18 @@ configfile: "config.json"
 internal = {}
 for sample, sreads in config.items():
     internal[sample] = {}
-    for rid, read in sreads.items():
-        if read.startswith('ftp') or read.startswith('http'):
-            internal[sample][rid] = f'download/{sample}.{rid}.fastq.gz'
+    for rid, rdata in sreads.items():
+        if isinstance(rdata, list):
+            if any(read.startswith('ftp') or read.startswith('http') for read in rdata):
+                raise Exception('List with url is not (yet) supported')
+            internal[sample][rid] = f'concat/{sample}.{rid}.fastq.gz'
+        elif isinstance(rdata, str):
+            if rdata.startswith('ftp') or rdata.startswith('http'):
+                internal[sample][rid] = f'download/{sample}.{rid}.fastq.gz'
+            else:
+                internal[sample][rid] = rdata
         else:
-            internal[sample][rid] = read
+            raise Exception('Read data can be either a string (path or url) or a list of strings')
 
 rule all:
     input:
@@ -31,6 +38,14 @@ rule wget_read:
         temp('download/{name}.{rid}.fastq.gz')
     shell:
         'wget {params.url} --quiet -O {output}'
+
+rule concat:
+    input:
+        lambda wc : config[wc.name][wc.rid]
+    output:
+        temp('concat/{name}.{rid}.fastq.gz')
+    shell:
+        'cat {input} > {output}'
 
 rule compress:
     input:
