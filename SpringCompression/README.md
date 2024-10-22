@@ -46,4 +46,4 @@ Spring does not conserve the optional part in the third line of the `fastq` file
 
 ### Outputs
 
-You should have both the `spring` files, `cmp` files should be empty. You can double check that all files were checked (no differences observed between the initial fastq and decompressed fasta files) by checking `output/compression.check.txt`, all samples should have  a `True` value in their 3 column. Finally, a table `output/compression.stat.tsv` contains information about the compression rate for each sample.
+You should have both the `spring` files, `cmp` files should be empty. You can double check that all files were checked (no differences observed between the initial fastq and decompressed fasta files) by checking `output/compression.check.txt`, all samples should have  a `True` value in their 3 column that you can check with this command line: `awk '{ print $3}' output/compression.check.txt | uniq -c`. Finally, a table `output/compression.stat.tsv` contains information about the compression rate for each sample.
