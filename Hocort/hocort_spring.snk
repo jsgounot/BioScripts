@@ -1,0 +1,162 @@
+CONDA_NAME = 'hocort'
+
+MAIN_THREADS = 40
+SUB_THREADS  = 8
+
+DATABASES = {
+    'bowtie2': '/home/users/astar/gis/ericejs/scratch/database/hocort/dbs/index_hg_combined_bowtie2',
+    'hisat2': '/home/users/astar/gis/ericejs/scratch/database/hocort/dbs/index_hg_combined_hisat2',
+    'bwamem2': '/home/users/astar/gis/ericejs/scratch/database/hocort/dbs/index_hg_combined_bwamem2',
+}
+
+MAPPERS = ['bowtie2', 'hisat2', 'bwamem2']
+MAPPERS = ['bowtie2', 'hisat2']
+MAPPERS = ['hisat2']
+
+# ---------------------------------------------------------------------------------------------
+
+for sample, sdata in config.items():
+    if 'r1' not in sdata or 'r2' not in sdata:
+        if 'spring' in sdata:
+            print (f'Will extract reads from spring file for sample: {sample}')
+            sdata['r1'] = f'temp/{sample}.spring.r1.fq.gz'
+            sdata['r2'] = f'temp/{sample}.spring.r2.fq.gz'
+        else:
+            raise Exception(f'Neither reads or spring files were found for sample: {sample}')
+
+# ---------------------------------------------------------------------------------------------
+
+print (config)
+
+rule all:
+    input:
+        expand('data/spring_out/{sample}.{runner}.spring',
+            sample=config, runner=MAPPERS),
+        expand('data/fastp_stats/{sample}.{runner}.json',
+            sample=config, runner=MAPPERS) 
+
+rule spring_decompress:
+    input:
+        lambda wc: config[wc.sample]['spring']
+    output:
+        r1 = temp('temp/{sample}.spring.r1.fq.gz'),
+        r2 = temp('temp/{sample}.spring.r2.fq.gz')
+    log:
+        'log/spring/{sample}.decompress.txt'
+    conda:
+        CONDA_NAME
+    threads:
+        SUB_THREADS
+    shell:
+        'spring -d -g -t {threads} -i {input} -o {output.r1} {output.r2}'
+
+rule fastp_first:
+    input:
+        r1 = lambda wc: config[wc.sample]['r1'],
+        r2 = lambda wc: config[wc.sample]['r2']
+    output:
+        r1 = temp('temp/{sample}.fastp.r1.fq.gz'),
+        r2 = temp('temp/{sample}.fastp.r2.fq.gz'),
+        re = 'data/fastp/{sample}.raw.json',
+        ht = 'data/fastp/{sample}.raw.html'
+    log:
+        'log/fastp/{sample}.raw.txt'
+    conda:
+        CONDA_NAME
+    shell:
+        '(fastp -i {input.r1} -I {input.r2} -j {output.re} -h {output.ht} \
+        -o {output.r1} -O {output.r2}) 2> {log}'
+
+rule hocort_hisat:
+    input:
+        r1 = rules.fastp_first.output['r1'],
+        r2 = rules.fastp_first.output['r2']
+    output:
+        r1 = temp('temp/{sample}.hocort.hisat2.r1.fq.gz'),
+        r2 = temp('temp/{sample}.hocort.hisat2.r2.fq.gz')
+    params:
+        idx = DATABASES['hisat2']
+    log:
+        'log/hocort_hisat/{sample}.log'
+    conda:
+        CONDA_NAME
+    threads:
+        MAIN_THREADS
+    shell:
+        'hocort map hisat2 -t {threads} -x {params.idx} -i {input.r1} {input.r2} -o {output.r1} {output.r2} 2> {log}'
+
+rule hocort_bowties:
+    input:
+        r1 = rules.fastp_first.output['r1'],
+        r2 = rules.fastp_first.output['r2']
+    output:
+        r1 = temp('temp/{sample}.hocort.bowtie2.r1.fq.gz'),
+        r2 = temp('temp/{sample}.hocort.bowtie2.r2.fq.gz')
+    params:
+        idx = DATABASES['bowtie2']
+    log:
+        'log/hocort_bowtie2/{sample}.log'
+    conda:
+        CONDA_NAME
+    threads:
+        MAIN_THREADS
+    shell:
+        'hocort map bowtie2 -t {threads} -x {params.idx} -i {input.r1} {input.r2} -o {output.r1} {output.r2} 2> {log}'
+
+rule hocort_bwamem2:
+    input:
+        r1 = rules.fastp_first.output['r1'],
+        r2 = rules.fastp_first.output['r2']
+    output:
+        r1 = temp('temp/{sample}.hocort.bwamem2.r1.fq.gz'),
+        r2 = temp('temp/{sample}.hocort.bwamem2.r2.fq.gz')
+    params:
+        idx = DATABASES['bwamem2']
+    log:
+        'log/hocort_bwamem2/{sample}.log'
+    conda:
+        CONDA_NAME
+    threads:
+        MAIN_THREADS
+    shell:
+        'hocort map bwamem2 -t {threads} -x {params.idx} -i {input.r1} {input.r2} -o {output.r1} {output.r2} 2> {log}'
+
+rule fastp_second:
+    input:
+        r1 = 'temp/{sample}.hocort.{runner}.r1.fq.gz',
+        r2 = 'temp/{sample}.hocort.{runner}.r2.fq.gz'
+    output:
+        re = 'data/fastp/{sample}.{runner}.json',
+        ht = 'data/fastp/{sample}.{runner}.html'
+    log:
+        'log/fastp/{sample}.{runner}.txt'
+    conda:
+        CONDA_NAME
+    shell:
+        '(fastp -i {input.r1} -I {input.r2} -j {output.re} -h {output.ht}) 2> {log}'
+
+rule decont_stat:
+    input:
+        first  = rules.fastp_first.output['re'],
+        second = 'data/fastp/{sample}.{runner}.json'
+    output:
+        'data/fastp_stats/{sample}.{runner}.json'
+    script:
+        'fastp_stats.py'
+
+rule spring_compress:
+    input:
+        r1 = 'temp/{sample}.hocort.{runner}.r1.fq.gz',
+        r2 = 'temp/{sample}.hocort.{runner}.r2.fq.gz'
+    output:
+        'data/spring_out/{sample}.{runner}.spring'
+    log:
+        'log/spring/{sample}.{runner}.compress.txt'
+    conda:
+        CONDA_NAME
+    priority:
+        1
+    threads:
+        SUB_THREADS
+    shell:
+        'spring -c -g -t {threads} -i {input.r1} {input.r2} -o {output} 2> {log}'
