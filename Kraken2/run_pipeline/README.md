@@ -1,6 +1,6 @@
 # Kraken2 / Bracken pipeline
 
-Snakemake pipeline for [kraken2](http://ccb.jhu.edu/software/kraken2/) and [bracken](https://ccb.jhu.edu/software/bracken/) for several samples and database. Some arguments (`paired`, `gzip-compressed` and `bzip2-compressed`) are infered based on your input data. You can custom all command lines with config file parameters (see configuration file section). Integrate spring files input (Illumina paired-end only).
+Snakemake pipeline for [kraken2](http://ccb.jhu.edu/software/kraken2/) and [bracken](https://ccb.jhu.edu/software/bracken/) for several samples and database. Some arguments (`paired`, `gzip-compressed` and `bzip2-compressed`) are infered based on your input data. You can custom all command lines with config file parameters (see configuration file section). Handle optional spring files input (Illumina paired-end only).
 
 ```bash
 mamba create -n kraken2 kraken2 bracken snakemake
@@ -56,12 +56,12 @@ By default, the number of threads (4), the memory (1000MB) for each job and the 
 
 Extract the reads associated to a taxonomic ID, based on Kraken2 output files.
 
-```
+```bash
 python extract_reads.py --help
 usage: extract_reads.py [-h] [--paired] [--strict] [--count [COUNT]] [--seed [SEED]] [--quiet] output taxid [fastq ...]
 
 positional arguments:
-  output           Kraken fastq file
+  output           Kraken output file
   taxid            Target taxonomic ID. Unclassified is 0
   fastq            Fastq file(s) (default: None)
 
@@ -69,20 +69,20 @@ options:
   -h, --help       show this help message and exit
   --paired         If paired-end fastq, return reads only if both pairs are assigned to taxid (default: False)
   --strict         Raise an error if one read is not found (default: False)
-  --count [COUNT]  Limit the number of output reads to n (default: 0)
-  --seed [SEED]    Random seed number if case of count (default: 1)
+  --count [COUNT]  Randomly pick and output COUNT reads. 0 = all reads (default: 0)
+  --seed [SEED]    Seed number when using count (default: 1)
   --quiet          Might reduce RAM usage (default: False)
 ```
 
 Example:
 
-```
+```bash
 python extract_reads.py kraken2/groupname/reports/sample/database.kraken.output.tsv.gz 7062 sample.fastq.*.fq.gz --count 10 --strict | gzip > sample.7062.fastq.gz
 ```
 
-Output is a fastq format, if you prefer fasta:
+Output is a fastq format, that you can easily convert to fasta on the fly
 
-```
+```bash
 python extract_reads.py kraken2/groupname/reports/sample/database.kraken.output.tsv.gz 7062 sample.fastq.*.fq.gz --count 10 --strict | sed -n '1~4s/^@/>/p;2~4p' | gzip > sample.7062.fa.gz
 ```
 

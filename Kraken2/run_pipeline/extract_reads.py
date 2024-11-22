@@ -2,7 +2,7 @@
 # @Author: jsgounot
 # @Date:   2024-11-20 18:22:51
 # @Last modified by:   jsgounot
-# @Last Modified time: 2024-11-21 14:37:39
+# @Last Modified time: 2024-11-22 11:11:25
 
 import os, glob, gzip, sys
 import argparse, random
@@ -14,13 +14,13 @@ parser = argparse.ArgumentParser(
     prog='extract_reads.py',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('output', help='Kraken fastq file')
+parser.add_argument('output', help='Kraken output file')
 parser.add_argument('taxid', help='Target taxonomic ID. Unclassified is 0', type=int)
 parser.add_argument('fastq', nargs='*', help='Fastq file(s)')
 parser.add_argument('--paired', action='store_true', help='If paired-end fastq, return reads only if both pairs are assigned to taxid')
 parser.add_argument('--strict', action='store_true', help='Raise an error if one read is not found')
-parser.add_argument('--count', nargs='?', help='Limit the number of output reads to n', type=int, default=0)
-parser.add_argument('--seed', nargs='?', help='Random seed number if case of count', type=int, default=1)
+parser.add_argument('--count', nargs='?', help='Randomly pick and output COUNT reads. 0 = all reads', type=int, default=0)
+parser.add_argument('--seed', nargs='?', help='Seed number when using count', type=int, default=1)
 parser.add_argument('--quiet', action='store_true', help='Might reduce RAM usage')
 args = parser.parse_args()
 
