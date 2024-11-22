@@ -1,0 +1,161 @@
+import glob, os
+
+CONDA_NAME = 'hocort'
+DEFAULT_THREADS = 8
+DEFAULT_MEMORY_MB = 4000
+DEFAULT_BRACKEN_RANKS = {'species' : 'S', 'genus' : 'G'}
+
+# -------------------------------------------------------------------------------------------
+
+print ('Read configuration file')
+
+inputs_values = []
+
+for sample, sdata in config.items() :
+    print (f'Check parameters for {sample}')
+
+    reads = sdata.get('reads', None)
+    spring = sdata.get('spring', None)
+    
+    if reads:
+        print (f'{len(reads)} reads provided') 
+        paired = len(reads) == 2
+
+        for fname in reads :
+            if not os.path.isfile(fname) :
+                raise Exception(f'Read not found: {fname}')
+
+        comp = [fname.endswith('.gz') for fname in dbparam['reads']]
+        gzip = any(comp)         
+        if gzip and not all(comp): 
+            raise Exception('Not all reads are gz compressed ?')
+        print ('Reads seems to be gzip compressed, add `gzip-compressed` option')
+
+        comp = [fname.endswith('.bgz') for fname in dbparam['reads']]
+        bzip = any(comp)         
+        if bzip and not all(comp): 
+            raise Exception('Not all reads are bzip2 compressed ?')
+        print ('Reads seems to be bzip2 compressed, add `bzip2-compressed` option')
+
+    elif spring:
+            print (f'Spring file detected for sample: {sample}. Assume paired-end Illumina sequencing.')
+            paired = gzip = True
+            bzip = False
+            sdata['reads'] = [
+                f'temp/{sample}.spring.r1.fq.gz',
+                f'temp/{sample}.spring.r2.fq.gz',
+            ]
+
+    else:
+        raise Exception(f'Unable to find either reads or spring file for sample: {sample}')
+
+    for dbname, dbparam in sdata.items() :
+        if dbname in ('reads', 'spring'): continue
+
+        print (f'Check parameters for {dbname}')
+        dbparam.setdefault('kraken_adding', [])
+
+        if paired:
+            if str(dbparam.get('paired')) != 'False' and reads:
+                print ('2 reads detected and paired NOT set to False, assume paired reads')
+                dbparam['kraken_adding'].append('--paired')
+            elif reads:
+                print ('2 reads detected and paired set to False, pass')
+
+        dbpath = dbparam['database']
+        if not os.path.isdir(dbpath) :
+            raise Exception(f'Database directory not found: {dbpath}')
+
+        if gzip: dbparam['kraken_adding'].append('--gzip-compressed')
+        if bzip: dbparam['kraken_adding'].append('--bzip2-compressed')
+            
+
+        dbparam['kraken_adding'] = ' '.join(add.strip()
+            for add in set(dbparam['kraken_adding']))
+
+        dbparam['bracken_adding'] = ' '.join(add.strip()
+            for add in set(dbparam.get('bracken_adding', [])))
+
+        dbparam.setdefault('bracken_ranks', DEFAULT_BRACKEN_RANKS)
+        for rank, code in dbparam['bracken_ranks'].items() :
+            inputs_values.append((sample, dbname, rank))
+            
+def getc(wc, key, mandatory=True, default=''):
+    sample, name = wc.sample, wc.name
+    if mandatory and key not in config[sample][name] :
+        raise Exception(f'Option not found: {key} ({sample}, {name})')
+    return config[sample][name].get(key, default)
+
+samples, names, ranks = zip(* inputs_values)
+
+# -------------------------------------------------------------------------------------------
+
+rule all:
+    input:
+        expand('reports/{sample}/{name}.bracken.{rank}.report.tsv', zip, 
+            sample=samples, name=names, rank=ranks),
+
+rule spring_decompress:
+    input:
+        reads = lambda wc: config[wc.sample]['spring']
+    output:
+        r1 = temp('temp/{sample}.spring.r1.fq.gz'),
+        r2 = temp('temp/{sample}.spring.r2.fq.gz')
+    log:
+        'logs/spring/{sample}.decompress.txt'
+    conda:
+        CONDA_NAME
+    threads:
+        8
+    shell:
+        'spring -d -g -t {threads} -i {input} -o {output.r1} {output.r2}'
+
+rule kraken:
+    input:
+        reads = lambda wc: config[wc.sample]['reads'],
+        database = lambda wc : getc(wc, 'database')
+    output:
+        report = 'reports/{sample}/{name}.kraken.report.tsv',
+        output = temp('reports/{sample}/{name}.kraken.output.tsv')
+    params:
+        adding = lambda wc : getc(wc, 'kraken_adding', False)
+    threads:
+        lambda wc : getc(wc, 'threads', False, DEFAULT_THREADS)
+    resources:
+         mem_mb = lambda wc : getc(wc, 'memory', False, DEFAULT_MEMORY_MB)
+    priority:
+        1
+    conda:
+        CONDA_NAME
+    log:
+        'logs/{sample}.{name}.kraken.log'
+    shell:
+        'kraken2 --db {input.database} --threads {threads} --output {output.output} --report {output.report} {params.adding} {input.reads} 2> {log}'
+
+rule compress_output:
+    input:
+        rules.kraken.output['output']
+    output:
+        'reports/{sample}/{name}.kraken.output.tsv.gz'
+    shell:
+        'gzip {input}'
+
+rule bracken:
+    input:
+        report = 'reports/{sample}/{name}.kraken.report.tsv',
+        output = 'reports/{sample}/{name}.kraken.report.tsv.gz',
+        database = lambda wc : getc(wc, 'database')
+    output:
+        report = 'reports/{sample}/{name}.bracken.{rank}.report.tsv',
+        out = 'reports/{sample}/{name}.bracken.{rank}.output.tsv'
+    params:
+        adding = lambda wc : getc(wc, 'bracken_adding', False),
+        rank_code = lambda wc : getc(wc, 'bracken_ranks')[wc.rank]
+    resources:
+         mem_mb = lambda wc : getc(wc, 'memory', False, DEFAULT_MEMORY_MB)
+    conda:
+        CONDA_NAME
+    log:
+        'logs/{sample}.{name}.{rank}.bracken.log'
+    shell:
+        'bracken -d {input.database} -i {input.report} -o {output.out} -w {output.report} -l {params.rank_code} {params.adding} 2> {log}'
