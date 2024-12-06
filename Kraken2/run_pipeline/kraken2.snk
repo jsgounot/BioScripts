@@ -25,17 +25,21 @@ for sample, sdata in config.items() :
             if not os.path.isfile(fname) :
                 raise Exception(f'Read not found: {fname}')
 
-        comp = [fname.endswith('.gz') for fname in dbparam['reads']]
+        comp = [fname.endswith('.gz') for fname in reads]
         gzip = any(comp)         
         if gzip and not all(comp): 
             raise Exception('Not all reads are gz compressed ?')
-        print ('Reads seems to be gzip compressed, add `gzip-compressed` option')
+        
+        if gzip:
+            print ('Reads seems to be gzip compressed, add `gzip-compressed` option')
 
-        comp = [fname.endswith('.bgz') for fname in dbparam['reads']]
+        comp = [fname.endswith('.bgz') for fname in reads]
         bzip = any(comp)         
         if bzip and not all(comp): 
             raise Exception('Not all reads are bzip2 compressed ?')
-        print ('Reads seems to be bzip2 compressed, add `bzip2-compressed` option')
+        
+        if bzip:
+            print ('Reads seems to be bzip2 compressed, add `bzip2-compressed` option')
 
     elif spring:
             print (f'Spring file detected for sample: {sample}. Assume paired-end Illumina sequencing.')
@@ -142,8 +146,8 @@ rule compress_output:
 
 rule bracken:
     input:
-        report = 'reports/{sample}/{name}.kraken.report.tsv',
-        output = 'reports/{sample}/{name}.kraken.report.tsv.gz',
+        report = rules.kraken.output['report'],
+        output = rules.compress_output.output,
         database = lambda wc : getc(wc, 'database')
     output:
         report = 'reports/{sample}/{name}.bracken.{rank}.report.tsv',
