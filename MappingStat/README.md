@@ -9,8 +9,3 @@ Can be easily merged to another pipeline.
 * python pandas
 * minimap2
 * samtools
-
-# Additionnal note
-
-Be sure to give proper right to shell script on scripts/mapped.stat.sh (chmod +x) !
-You will obtain 2 window files for each sample. The first one is a 50bp window and the second one is 1kb window.
