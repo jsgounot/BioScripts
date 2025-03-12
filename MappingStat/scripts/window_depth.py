@@ -1,46 +1,25 @@
-# -*- coding: utf-8 -*-
-# @Author: jsgounot
-# @Date:   2021-08-30 10:12:19
-# @Last Modified by:   jsgounot
-# @Last Modified time: 2021-08-30 15:49:34
-
+import sys, subprocess, io
 import pandas as pd
-import numpy as np
 
-depthfile = snakemake.input[0]
-idxstat   = snakemake.input[1]
-depthw    = snakemake.output[0]
+def process_chunk(sdf, windowsize):
+    sdf['window'] = (sdf['position'] - 1) // windowsize
+    sdf = sdf.groupby(['contig', 'window'])['depth'].agg(['size', 'sum']).reset_index()
+    sdf.columns = ['contig', 'window', 'npos', 'sum_depth']
+    return sdf.reset_index()
 
-def iterate_depth(fname, window=50, chunksize=100000):
-    kwargs = {
-        "sep": "\t",
-        "compression": "gzip",
-        "names": ["contig", "position", "coverage"],
-        "chunksize": chunksize
-    }
-    
-    with pd.read_csv(fname, ** kwargs) as reader:
-        for sdf in reader:
-            sdf["window"] = (sdf["position"] // window) * window
-            sdf = sdf.groupby(["contig", "window"])["coverage"].sum()
-            sdf = sdf.reset_index()
-            yield sdf
+def make_depth_window(bamfile, windowsize=10000):
+    cmdline = f'samtools depth -aa {bamfile}'
+    sp = subprocess.Popen(cmdline.split(), stdout=subprocess.PIPE)
+    sio = io.TextIOWrapper(sp.stdout)
+    names = ['contig', 'position', 'depth']
+    iterator = pd.read_csv(sio, sep='\t', names=names, iterator=True, chunksize=100000)
+    df = pd.concat(process_chunk(sdf, windowsize) for sdf in iterator)
+    df = df.groupby(['contig', 'window'])[['npos', 'sum_depth']].sum()
+    df['mcov'] = df['sum_depth'] / df['npos']
+    return df.reset_index()
 
-def yield_window_idxstat(idxstat, window=50):
-    names = ["contig", "length", "mapped", "unmapped"]
-    idxstatdf = pd.read_csv(idxstat, sep="\t", names=names, skipfooter=1, usecols=[0, 1])
-
-    for contig, length in zip(idxstatdf["contig"], idxstatdf["length"]):
-        windows = np.arange(0, length + 1, window)
-        windows = pd.Series(windows).rename("window").to_frame()
-        windows["contig"] = contig
-        windows = windows[["contig", "window"]]
-        yield windows
-
-df = pd.concat(iterate_depth(depthfile))
-df = df.groupby(["contig", "window"])["coverage"].sum()
-df = df.reset_index()
-  
-windows = pd.concat(yield_window_idxstat(idxstat, 50))
-df = windows.merge(df, on=["contig", "window"], how="left").fillna(0)
-df.to_csv(depthw, index=False, compression="gzip", sep="\t")
+bamfile = snakemake.input[0]
+windowsize = snakemake.params['windowsize']
+df = make_depth_window(bamfile, windowsize)
+outfile = snakemake.output[0]
+df.to_csv(outfile, sep='\t', index=False)

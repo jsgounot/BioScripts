@@ -1,7 +1,3 @@
-from collections import defaultdict
-
-configfile: "config.json"
-
 SAMPLES, RNAMES = [], []
 
 for sample, sinfo in config.items() :
@@ -11,24 +7,46 @@ for sample, sinfo in config.items() :
         SAMPLES.append(sample)
         RNAMES.append(rname)
 
+def get_fastq_files(sample, rname):
+    if rname in config[sample]:
+        return config[sample][rname]
+    elif 'spring' in config[sample]:
+        return f'temp/{sample}.spring.{rname}.fq.gz'
+    else:
+        raise Exception(f'Unable to find either illumina (`r1` and `r2`) or \
+            `spring` file in config file for sample: {sample}')
+
 # -------------------------------------------------------------------------------------------
 
 rule all:
     input:
-        expand("stats/depth/{sample}.{rname}.depth.window.1kb.tsv.gz", zip, sample=SAMPLES, rname=RNAMES),
-        expand("stats/mapping/{sample}.{rname}.mapped.txt", zip, sample=SAMPLES, rname=RNAMES)
+        expand("stats/mapping/{sample}.{rname}.mapped.txt", zip, sample=SAMPLES, rname=RNAMES),
+        expand("stats/depth/{sample}.{rname}.coverage.tsv", zip, sample=SAMPLES, rname=RNAMES),
+        expand("stats/depth/{sample}.{rname}.depth_bdist.tsv.gz", zip, sample=SAMPLES, rname=RNAMES),
+        expand("stats/depth/{sample}.{rname}.depth.1000.tsv.gz", zip, sample=SAMPLES, rname=RNAMES),
+        
+rule spring:
+    input:
+        reads = lambda wc: get_fastq_files(wc.sample, 'spring')
+    output:
+        r1 = temp('temp/{sample}.spring.r1.fq.gz'),
+        r2 = temp('temp/{sample}.spring.r2.fq.gz')
+    threads:
+        16
+    shell:
+        'spring -d -g -t {threads} -i {input} -o {output.r1} {output.r2}'
 
 rule minimap2:
     input:
-        r1 = lambda wildcards: config[wildcards.sample]["r1"],
-        r2 = lambda wildcards: config[wildcards.sample]["r2"],
+        r1 = lambda wc: get_fastq_files(wc.sample, 'r1'),
+        r2 = lambda wc: get_fastq_files(wc.sample, 'r2'),
         reference = lambda wildcards: config[wildcards.sample]["references"][wildcards.rname]
     output:
         temp("data/sorted_bam/{sample}.{rname}.bam")
     params:
         rg = "@RG\\tID:{sample}\\tSM:{sample}\\tLB:{rname}"
     threads:
-        8
+        16
     resources:
         mem_mb = lambda wc, attempt: attempt * 32000
     log:
@@ -45,51 +63,41 @@ rule index:
     shell:
         "samtools index {input}"
 
-rule idxstats:
-    input:
-        bam = "data/sorted_bam/{sample}.{rname}.bam",
-        bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
-    output:
-        "data/sorted_bam/{sample}.{rname}.idxstats"
-    shell:
-        "samtools idxstats {input.bam} > {output}"
-
 rule stat_mapped:
     input:
         bam = "data/sorted_bam/{sample}.{rname}.bam",
         bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
     output:
         "stats/mapping/{sample}.{rname}.mapped.txt"
-    shell:
-        "scripts/mapped.stat.sh {input.bam} > {output}"
-
-rule samtools_depth:
-    input:
-        bam = "data/sorted_bam/{sample}.{rname}.bam",
-        bai = "data/sorted_bam/{sample}.{rname}.bam.bai"
-    output:
-        "data/depths/{sample}.{rname}.tsv.gz"
-    shell:
-        "samtools depth {input.bam} | gzip > {output}"
+    script:
+        "scripts/mapped.stat.sh"
 
 rule depth_window:
     input:
-        "data/depths/{sample}.{rname}.tsv.gz",
-        "data/sorted_bam/{sample}.{rname}.idxstats"
+        "data/sorted_bam/{sample}.{rname}.bam"
     output:
-        "stats/depth/{sample}.{rname}.depth.window.tsv.gz"
+        "stats/depth/{sample}.{rname}.depth.{windowsize}.tsv.gz"
+    params:
+        windowsize = lambda wc: int(wc.windowsize)
     resources:
         mem_mb = 8192
     script:
         "scripts/window_depth.py"
 
-rule depth_window_1kb:
+rule depth_bdist:
     input:
-        "stats/depth/{sample}.{rname}.depth.window.tsv.gz",
-        "data/sorted_bam/{sample}.{rname}.idxstats"
+        "data/sorted_bam/{sample}.{rname}.bam"
     output:
-        "stats/depth/{sample}.{rname}.depth.window.1kb.tsv.gz"
+        "stats/depth/{sample}.{rname}.depth_bdist.tsv.gz"
     resources:
         mem_mb = 8192
     script:
-        "scripts/window_depth_1kb.py"
+        "scripts/window_bdist.py"
+
+rule coverage:
+    input:
+        "data/sorted_bam/{sample}.{rname}.bam"
+    output:
+        "stats/depth/{sample}.{rname}.coverage.tsv"
+    shell:
+        "samtools coverage {input} > {output}"
